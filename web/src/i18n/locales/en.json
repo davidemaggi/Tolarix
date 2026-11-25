@@ -1,0 +1,57 @@
+{
+  "app": {
+    "name": "Tolarix",
+    "tagline": "Keep your wikis in sync",
+    "skipToContent": "Skip to main content"
+  },
+  "nav": {
+    "label": "Main navigation",
+    "dashboard": "Dashboard",
+    "connections": "Connections",
+    "flows": "Flows",
+    "settings": "Settings"
+  },
+  "theme": {
+    "label": "Theme",
+    "toggle": "Change theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "label": "Language",
+    "toggle": "Change language",
+    "en": "English",
+    "it": "Italiano"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "intro": "Your sync flows, their last run and their next run will appear here.",
+    "emptyTitle": "No flows yet",
+    "emptyBody": "A flow copies pages from one Master wiki to one or more Mirror wikis. Start by adding a connection to each wiki."
+  },
+  "connections": {
+    "title": "Connections",
+    "intro": "A connection tells Tolarix how to reach one wiki: Azure DevOps, Confluence or an Obsidian vault."
+  },
+  "flows": {
+    "title": "Flows",
+    "intro": "A flow mirrors a Master wiki, or part of it, into one or more Mirror wikis on a schedule or when you run it."
+  },
+  "settings": {
+    "title": "Settings",
+    "intro": "Appearance, language and your account."
+  },
+  "comingSoon": "Coming in a later version.",
+  "status": {
+    "server": "Server",
+    "checking": "Checking…",
+    "ok": "Running, version {{version}}",
+    "unreachable": "Not reachable"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This page does not exist.",
+    "back": "Back to the dashboard"
+  }
+}

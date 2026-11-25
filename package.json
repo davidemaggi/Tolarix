@@ -1,0 +1,13 @@
+{
+  "name": "tolarix-monorepo",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "packageManager": "pnpm@10.34.9",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "pnpm --filter web build && pnpm run build:core",
+    "build:core": "node scripts/build-core.mjs",
+    "test": "pnpm --filter web test && cd core && go test ./...",
+    "lint": "pnpm --filter web lint && pnpm --filter web typecheck"
+  }
+}
