@@ -1,0 +1,35 @@
+# Example for `tolarix flow import docs/examples/flows.example.yaml`.
+#
+# Items are matched by name: importing the file again updates them, and each
+# mirror keeps its sync history as long as its connection and location stay
+# the same. Relative vault paths are relative to this file.
+#
+# Never put secrets in this file: use `secretEnv: SOME_VARIABLE` and set the
+# variable when you run the import.
+
+connections:
+  - name: My notes
+    kind: obsidian
+    config:
+      path: /home/me/Notes            # the folder that contains .obsidian/
+
+  - name: Team vault
+    kind: obsidian
+    config:
+      path: /srv/team-vault
+
+flows:
+  - name: Notes to team
+    master: My notes
+    # Everything:            { mode: all }
+    # Only some subtrees:    { mode: selected, include: [Projects, "Guides/Onboarding"] }
+    # Everything but some:   { mode: all, exclude: [Private] }
+    scope: { mode: all, exclude: [Private] }
+    mirrors:
+      - connection: Team vault
+        location: { folder: "From my notes" }   # "" = the vault root
+    options:
+      deletePolicy: archive     # delete | archive (default) | keep
+      attachments: true         # copy images and files (default true)
+      banner: true              # "This page is mirrored from ..." on every page
+      adoptExisting: false      # take over same-named pages Tolarix did not create

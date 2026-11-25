@@ -1,6 +1,6 @@
 # Renderers (derived attachments) — design
 
-Status: designed 2026-11-25; interface lands in M2, the draw.io renderer in M5.
+Status: designed 2026-11-25; interface lands in M2, the draw.io renderer in M4 (with Confluence Data Center).
 
 ## Problem
 
@@ -71,7 +71,7 @@ that explains how to enable 2 or 3.
 | Azure DevOps | `[![Architecture](/.attachments/Architecture-<id>.png)](/.attachments/Architecture-<id>.drawio)` |
 | Confluence | If the target has the draw.io app (connection option): the `drawio` macro + both attachments. Otherwise an image macro + a link to the `.drawio` attachment |
 
-## To verify with real data (M5)
+## To verify with real data (M4)
 
 - Exact storage-format XML of the draw.io macro on **Cloud** vs **Data Center**
   (macro name, parameters such as `diagramName`, `revision`, `pageId`; embedded

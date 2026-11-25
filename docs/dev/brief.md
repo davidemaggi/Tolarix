@@ -9,6 +9,8 @@
 >   `.drawio` as an attachment in the mirror and also provide a PNG. Build a
 >   generic "render" capability; draw.io is the first renderer. See
 >   [renderers.md](renderers.md).
+> - **Connector priority** (2026-11-25): Confluence Data Center/Server and
+>   Azure DevOps Code wiki first, then the rest.
 > - Keep everything needed to continue development on another PC inside the
 >   repo (see [README.md](README.md) and the root `CLAUDE.md`).
 

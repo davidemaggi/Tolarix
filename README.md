@@ -1,27 +1,140 @@
+<div align="center">
+
+<img src="web/public/favicon.svg" alt="Tolarix logo" width="96" height="96" />
+
 # Tolarix
 
-Keep wikis in sync. One wiki is the **Master**; Tolarix creates and updates one
-or more read-only **Mirrors**, possibly in a different wiki format.
+**One wiki to write in. Every wiki stays up to date.**
 
-Supported (planned for v1): Azure DevOps project and code wikis, Confluence
-Cloud and Data Center, Obsidian vaults.
+Tolarix mirrors your Master wiki into Azure DevOps, Confluence and Obsidian —<br/>
+links, images and attachments included — on a schedule or with one click.
 
-Tolarix ships as one binary that is at once the web server, the scheduler and
-the CLI, plus a Docker image and a desktop app.
+[![CI](https://github.com/davidemaggi/Tolarix/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/davidemaggi/Tolarix/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
+![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Status](https://img.shields.io/badge/status-early%20development-orange)
 
-> **Status:** early development (milestone 1 of 8). Not usable yet. See
-> [docs/dev/plan.md](docs/dev/plan.md).
+[Why](#-why-tolarix) · [Features](#-features) · [How it works](#-how-it-works) · [Formats](#-supported-wikis) · [Roadmap](#-roadmap) · [Build](#-build-from-source)
 
-## Build from source
+</div>
 
-```sh
-pnpm install
-pnpm build
-./bin/tolarix serve --data-dir ./data
+> [!WARNING]
+> **Tolarix is in early development.** The sync engine works and already
+> syncs Obsidian vaults from the CLI; the web app and the other wikis are
+> coming. Star or watch the repo to follow along; the
+> [roadmap](#-roadmap) shows what lands next.
+
+---
+
+## 💡 Why Tolarix?
+
+Your engineers live in Azure DevOps. Your business lives in Confluence. You take
+notes in Obsidian. The same documentation ends up copied by hand into three
+places, and two of them are always out of date.
+
+Tolarix fixes that with a simple rule: **one wiki is the Master, the others are
+Mirrors.** Write once, and Tolarix keeps every Mirror in step: same pages, same
+hierarchy, working links, attachments and diagrams, converted to each wiki's own
+format.
+
+## ✨ Features
+
+- 🔁 **One-way, predictable sync.** Master → Mirrors, never the other way. No merge conflicts, no surprises.
+- 🧭 **Format-aware conversion.** Callouts, Mermaid, code blocks, tables and task lists are translated to each wiki's dialect. Anything a target can't show degrades gracefully, and the run report says so.
+- 🔗 **Links that keep working.** Internal links and images are rewritten for every mirror, so nothing points back to the Master by accident.
+- 🧩 **Sync it all, or just a branch.** Pick whole spaces or individual subtrees from a tree with checkboxes.
+- 🕵️ **Smart and incremental.** Content hashes and a mapping table mean only changed pages are touched, and renames are real moves rather than delete + create.
+- 🧪 **Dry-run first.** See exactly what would be created, updated, moved or deleted before anything is written.
+- 🗓️ **Schedules for humans.** "Every weekday at 07:30, Europe/Rome", not `30 7 * * 1-5`. Advanced cron is there if you want it.
+- 📐 **draw.io aware.** Diagrams stay editable as `.drawio` attachments *and* show up as PNGs in the mirror.
+- 🛡️ **Secure by default.** Encrypted secrets at rest (AES-256-GCM), nothing sensitive in logs or API responses, a single admin account with forced first-login password change.
+- 🌍 **English and Italian UI**, light and dark themes, keyboard-friendly and accessible.
+
+## 🧱 One core, three ways to run it
+
+| | |
+|---|---|
+| 🐳 **Docker** | A web app for your team: one container, one volume, an admin login. |
+| 🖥️ **Desktop** | A native app for Windows, macOS and Linux (Tauri). No server to run. |
+| ⌨️ **CLI** | `tolarix flow run docs --dry-run`, for scripts, cron and Windows Task Scheduler, with meaningful exit codes and `--json` output. |
+
+All three are the same single Go binary sharing the same SQLite database.
+
+## ⚙️ How it works
+
+```mermaid
+flowchart LR
+    M[(Master wiki)] -->|read| C{{Canonical model<br/>pages · links · attachments}}
+    C -->|render| R[Renderers<br/>draw.io → PNG]
+    R --> C
+    C -->|convert + write| A[(Azure DevOps)]
+    C -->|convert + write| F[(Confluence)]
+    C -->|convert + write| O[(Obsidian vault)]
 ```
 
-Developer setup: [docs/dev/README.md](docs/dev/README.md).
+Every connector translates to and from one **canonical model**: a tree of pages
+in CommonMark + GFM, with links expressed as stable page references. Adding a
+new wiki means writing one connector; the sync engine doesn't change.
 
-## License
+## 📚 Supported wikis
 
-GPL-3.0. See [LICENSE](LICENSE).
+| Wiki | As Master | As Mirror | Status |
+|---|:---:|:---:|---|
+| Obsidian vault | ✅ | ✅ | ✅ works (CLI) |
+| Confluence Data Center / Server | ✅ | ✅ | ⏭️ next up (M4) |
+| Azure DevOps — Code wiki | ✅ | ✅ | ⏭️ next up (M4) |
+| Confluence Cloud | ✅ | ✅ | 🗓️ planned (M5) |
+| Azure DevOps — Project wiki | ✅ | ✅ | 🗓️ planned (M5) |
+
+## 🗺️ Roadmap
+
+- [x] **M1 · Foundations.** Single binary, SQLite with migrations, encrypted secrets, web shell (i18n, themes), CI
+- [x] **M2 · Sync engine + Obsidian.** Canonical model, incremental sync, moves, delete policies, dry-run, CLI
+- [ ] **M3 · Web app + Docker.** Admin login, guided wizards, dashboard, live run logs
+- [ ] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
+- [ ] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
+- [ ] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
+- [ ] **M7 · Desktop app.** Installers for Windows, macOS and Linux
+- [ ] **M8 · v1.0.** Docs, hardening, accessibility pass, release
+
+Details and decisions: [docs/dev/plan.md](docs/dev/plan.md).
+
+## 🚀 Build from source
+
+You'll need Go 1.27+, Node.js 22+ and pnpm.
+
+```sh
+git clone https://github.com/davidemaggi/Tolarix.git
+cd Tolarix
+pnpm install
+pnpm build                               # web UI + ./bin/tolarix
+./bin/tolarix serve --data-dir ./data    # → http://localhost:8080
+```
+
+### Try it: mirror one Obsidian vault into another
+
+```sh
+# Describe your vaults and the flow (see docs/examples/flows.example.yaml)
+./bin/tolarix flow import my-flows.yaml
+
+./bin/tolarix flow run "Notes to team" --dry-run   # see what would change
+./bin/tolarix flow run "Notes to team"             # do it
+./bin/tolarix runs show <run-id>                   # what changed, warnings included
+```
+
+Run it again and only what changed in the Master is touched: renames become
+moves, removed pages are archived, and edits made by hand on the mirror are
+overwritten, each one reported.
+
+The developer guide is in [docs/dev/README.md](docs/dev/README.md).
+
+## 🤝 Contributing
+
+Ideas, bug reports and pull requests are welcome. If you're planning
+something big, such as a new wiki connector, open an issue first so we can
+agree on the shape. Start with the [developer guide](docs/dev/README.md).
+
+## 📄 License
+
+Tolarix is free software under the [GNU GPL v3](LICENSE).

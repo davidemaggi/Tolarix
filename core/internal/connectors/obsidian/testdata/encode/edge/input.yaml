@@ -1,0 +1,64 @@
+# Edge cases: illegal characters, sibling name collisions (case-insensitive),
+# reserved names at the root, links to pages outside the mirror and to
+# folder-only pages, attachments missing from the tree, links in tables,
+# per-note attachment folders ("./files") and same-name attachments.
+pages:
+  - id: "1"
+    title: "Q&A: what? / why*"
+    order: 0
+    attachments: [aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111]
+    body: |
+      Out of scope: [Elsewhere](tolarix://page/not-mirrored).
+      Folder only: [Group](tolarix://page/3).
+      Missing attachment: ![gone.png](tolarix://att/ffff).
+      Image: ![img.png](tolarix://att/aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111 "width=120")
+
+      | Link | Note |
+      |------|------|
+      | [Custom text](tolarix://page/2#Part%20one) | in a table |
+  - id: "2"
+    title: "Notes"
+    order: 1
+    body: |
+      Self link: [Notes](tolarix://page/2) and [renamed](tolarix://page/2b).
+  - id: "2b"
+    title: "notes"
+    order: 2
+    body: |
+      Same name, different case.
+  - id: "4"
+    title: "Archived"
+    order: 3
+    body: |
+      A page named like the archive folder.
+  - id: "3"
+    title: "Group"
+    order: 4
+    placeholder: true
+  - id: "3/a"
+    parent: "3"
+    title: "Child"
+    order: 0
+    attachments: [bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222]
+    body: |
+      ![img.png](tolarix://att/bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222)
+      [spec](tolarix://att/bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222)
+  - id: "3/b"
+    parent: "3"
+    title: "Trailing dots..."
+    order: 1
+    meta:
+      - key: tags
+        value: [x, y]
+      - key: nested
+        value: {a: 1, b: [true, "two"]}
+    body: "No trailing newline"
+attachments:
+  - hash: aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111
+    name: img.png
+    size: 7
+    mediaType: image/png
+  - hash: bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222
+    name: IMG.PNG
+    size: 7
+    mediaType: image/png

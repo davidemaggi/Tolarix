@@ -1,0 +1,3 @@
+Home [broken-link] the link [[Does Not Exist]] points to a note or file that does not exist; it is kept as plain text
+Home [note-embed] the embedded note "Projects/Beta" is shown as a link in mirrors
+Notes/Bad Front Matter [frontmatter-invalid] the front matter (properties) is not valid YAML and was kept as text: yaml: line 1: did not find expected ',' or ']'
