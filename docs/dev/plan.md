@@ -21,6 +21,14 @@ The original product brief is in [brief.md](brief.md).
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
+### Where we left off (2026-11-25)
+
+- M2 is committed and pushed on `develop`. The product owner has not reviewed it yet: start the next session by asking for that review and approval to begin M3.
+- **Open question for the product owner:** CI (`.github/workflows/ci.yml`) only runs on `main` and on pull requests, so the README badge has no status for `develop`. Should `develop` be added to the push triggers?
+- Defaults chosen in M2 that are awaiting review are listed under "Taken during M2" below.
+- **Next: M3.** OpenAPI contract, single-admin auth, dashboard, connection and flow wizards, run history with live logs (SSE), Docker image.
+- To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
+
 ## Milestone details
 
 1. **Scaffold** — monorepo, Go module, cobra skeleton (`version`, `serve`), data-dir resolution, SQLite + goose migrations (connections, flows, targets, mappings, runs, run_events, locks, settings, admin, sessions), secrets (AES-GCM, key from env/file), slog; React + Vite + TS + Tailwind + shadcn, Router, Query, i18next en/it, theme switch, app shell; ESLint/Prettier/golangci-lint; GitHub Actions.
