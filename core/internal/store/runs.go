@@ -93,18 +93,63 @@ func scanRun(row interface{ Scan(...any) error }, withReport bool) (Run, error) 
 
 // ListRuns returns the latest runs, optionally for one flow.
 func (s *Store) ListRuns(ctx context.Context, flowID string, limit int) ([]Run, error) {
-	if limit <= 0 {
-		limit = 50
+	return s.QueryRuns(ctx, RunQuery{FlowID: flowID, Limit: limit})
+}
+
+// RunQuery filters the run history. Zero values mean "any".
+type RunQuery struct {
+	FlowID string
+	Status string
+	DryRun *bool
+	// Before returns runs started strictly before this run (keyset paging).
+	Before string
+	Limit  int
+}
+
+// QueryRuns returns runs, newest first.
+func (s *Store) QueryRuns(ctx context.Context, q RunQuery) ([]Run, error) {
+	if q.Limit <= 0 {
+		q.Limit = 50
 	}
-	q := `SELECT ` + runCols + ` FROM runs r JOIN flows f ON f.id = r.flow_id`
+	query := `SELECT ` + runCols + ` FROM runs r JOIN flows f ON f.id = r.flow_id WHERE 1 = 1`
 	args := []any{}
-	if flowID != "" {
-		q += ` WHERE r.flow_id = ?`
-		args = append(args, flowID)
+	if q.FlowID != "" {
+		query += ` AND r.flow_id = ?`
+		args = append(args, q.FlowID)
 	}
-	q += ` ORDER BY r.started_at DESC LIMIT ?`
-	args = append(args, limit)
-	rows, err := s.DB.QueryContext(ctx, q, args...)
+	if q.Status != "" {
+		query += ` AND r.status = ?`
+		args = append(args, q.Status)
+	}
+	if q.DryRun != nil {
+		query += ` AND r.dry_run = ?`
+		args = append(args, boolInt(*q.DryRun))
+	}
+	if q.Before != "" {
+		query += ` AND (r.started_at, r.id) < (SELECT started_at, id FROM runs WHERE id = ?)`
+		args = append(args, q.Before)
+	}
+	query += ` ORDER BY r.started_at DESC, r.id DESC LIMIT ?`
+	args = append(args, q.Limit)
+	return s.collectRuns(ctx, query, args...)
+}
+
+// LatestRuns returns the most recent run of every flow that has one, by flow id.
+func (s *Store) LatestRuns(ctx context.Context) (map[string]Run, error) {
+	runs, err := s.collectRuns(ctx, `SELECT `+runCols+` FROM runs r JOIN flows f ON f.id = r.flow_id
+		WHERE r.id = (SELECT r2.id FROM runs r2 WHERE r2.flow_id = r.flow_id ORDER BY r2.started_at DESC, r2.id DESC LIMIT 1)`)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]Run, len(runs))
+	for _, r := range runs {
+		out[r.FlowID] = r
+	}
+	return out, nil
+}
+
+func (s *Store) collectRuns(ctx context.Context, query string, args ...any) ([]Run, error) {
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -43,6 +43,9 @@ type Runner struct {
 	StaleAfter time.Duration
 	// HeartbeatEvery refreshes the lock (default 30s).
 	HeartbeatEvery time.Duration
+	// Notify, when set, is told about every new log line and the end of a
+	// run, so in-process live views (SSE) update without polling.
+	Notify func(runID string)
 }
 
 // Result is the outcome of RunFlow.
@@ -67,9 +70,39 @@ func (e *LockedError) Error() string {
 
 func (e *LockedError) Unwrap() error { return ErrLocked }
 
-// RunFlow runs one flow now. A non-nil error means the run could not start
-// (lock held, database error); sync failures are reported in Result.
+// RunFlow runs one flow now and waits for it. A non-nil error means the run
+// could not start (lock held, database error); sync failures are reported in
+// Result.
 func (r *Runner) RunFlow(ctx context.Context, flow store.Flow, trigger string, dryRun bool) (*Result, error) {
+	h, err := r.Start(ctx, flow, trigger, dryRun)
+	if err != nil {
+		return nil, err
+	}
+	return h.Wait()
+}
+
+// Handle is a started run.
+type Handle struct {
+	// Run is the run as recorded when it started (status "running").
+	Run    store.Run
+	done   chan struct{}
+	result *Result
+	err    error
+}
+
+// Wait blocks until the run finishes.
+func (h *Handle) Wait() (*Result, error) {
+	<-h.done
+	return h.result, h.err
+}
+
+// Done is closed when the run finishes.
+func (h *Handle) Done() <-chan struct{} { return h.done }
+
+// Start takes the lock, records the run and executes it in a goroutine. It
+// returns once the run exists, so callers can show or stream it at once.
+// Cancelling ctx cancels the run.
+func (r *Runner) Start(ctx context.Context, flow store.Flow, trigger string, dryRun bool) (*Handle, error) {
 	log := r.logger().With("flow", flow.Name)
 	runID := store.NewRunID()
 	if info, err := r.Store.AcquireLock(ctx, flow.ID, runID, r.holder(), r.staleAfter()); err != nil {
@@ -78,23 +111,36 @@ func (r *Runner) RunFlow(ctx context.Context, flow store.Flow, trigger string, d
 		}
 		return nil, fmt.Errorf("take the run lock: %w", err)
 	}
-	// Release with a fresh context: the run's may be cancelled by now.
-	defer func() {
+	release := func() {
+		// Release with a fresh context: the run's may be cancelled by now.
 		if err := r.Store.ReleaseLock(context.Background(), flow.ID, runID); err != nil {
 			log.Error("could not release the run lock", "error", err)
 		}
-	}()
-
+	}
 	run, err := r.Store.CreateRun(ctx, runID, flow.ID, trigger, dryRun)
 	if err != nil {
+		release()
 		return nil, fmt.Errorf("record the run: %w", err)
 	}
-	log = log.With("run_id", run.ID)
-	ev := &eventLogger{store: r.Store, runID: run.ID, log: log}
+	run.FlowName = flow.Name
+	h := &Handle{Run: run, done: make(chan struct{})}
+	go func() {
+		defer close(h.done)
+		defer release()
+		h.result, h.err = r.finishRun(ctx, flow, run, trigger, dryRun, log.With("run_id", run.ID))
+		r.notify(run.ID)
+	}()
+	return h, nil
+}
+
+func (r *Runner) finishRun(ctx context.Context, flow store.Flow, run store.Run, trigger string, dryRun bool, log *slog.Logger) (*Result, error) {
+	ev := &eventLogger{store: r.Store, runID: run.ID, log: log, notify: r.notify}
 
 	hbCtx, stopHB := context.WithCancel(ctx)
-	defer stopHB()
-	go r.heartbeat(hbCtx, flow.ID, runID, log)
+	hbDone := make(chan struct{})
+	go func() { defer close(hbDone); r.heartbeat(hbCtx, flow.ID, run.ID, log) }()
+	// Stop the heartbeat and wait for it, so nothing touches the lock after the run.
+	defer func() { stopHB(); <-hbDone }()
 
 	mode := "sync"
 	if dryRun {
@@ -135,6 +181,12 @@ func (r *Runner) RunFlow(ctx context.Context, flow store.Flow, trigger string, d
 		return nil, err
 	}
 	return &Result{Run: final, Report: report}, nil
+}
+
+func (r *Runner) notify(runID string) {
+	if r.Notify != nil {
+		r.Notify(runID)
+	}
 }
 
 func (r *Runner) execute(ctx context.Context, flow store.Flow, dryRun bool, ev *eventLogger) (*engine.Report, error) {
@@ -253,9 +305,10 @@ func (r *Runner) heartbeatEvery() time.Duration {
 
 // eventLogger writes engine log lines to the run's events and to slog.
 type eventLogger struct {
-	store *store.Store
-	runID string
-	log   *slog.Logger
+	store  *store.Store
+	runID  string
+	log    *slog.Logger
+	notify func(runID string)
 }
 
 func (l *eventLogger) Log(ctx context.Context, level slog.Level, msg string, attrs ...any) {
@@ -269,5 +322,14 @@ func (l *eventLogger) Log(ctx context.Context, level slog.Level, msg string, att
 	// Use a fresh context so the final lines of a cancelled run are kept.
 	if _, err := l.store.AddRunEvent(context.Background(), l.runID, level.String(), msg, m); err != nil {
 		l.log.Error("could not store a run log line", "error", err)
+		return
 	}
+	l.notify(l.runID)
+}
+
+// LockAlive reports whether a held lock still looks alive (its heartbeat is
+// recent). A stale lock belongs to a crashed process and is taken over by
+// the next run.
+func (r *Runner) LockAlive(li store.LockInfo, now time.Time) bool {
+	return now.Sub(li.HeartbeatAt) < r.staleAfter()
 }

@@ -18,12 +18,15 @@ var ErrConflict = errors.New("already exists")
 
 func newID() string { return uuid.Must(uuid.NewV7()).String() }
 
-const timeLayout = time.RFC3339Nano
+// timeLayout is fixed-width (always 9 fractional digits, always UTC "Z") so
+// stored timestamps compare correctly as strings in SQL. RFC3339Nano drops
+// trailing zeros, which breaks that ("…:00Z" sorts after "…:00.5Z").
+const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
 func now() string { return time.Now().UTC().Format(timeLayout) }
 
 func parseTime(s string) time.Time {
-	t, _ := time.Parse(timeLayout, s)
+	t, _ := time.Parse(time.RFC3339Nano, s) // also reads rows written before the fixed layout
 	return t
 }
 

@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -107,6 +109,94 @@ func TestServeDesktopPrintsReadyLineAndServes(t *testing.T) {
 			t.Fatalf("serve exit code %d", code)
 		}
 	case <-time.After(20 * time.Second):
+		t.Fatal("serve did not shut down")
+	}
+}
+
+// syncBuffer is a bytes.Buffer safe for a writer and a reader goroutine.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func TestServeWebFirstStartPasswordAndHealthcheck(t *testing.T) {
+	t.Setenv("TOLARIX_SECRET_KEY", "")
+	dir := t.TempDir()
+	pr, pw := io.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan int, 1)
+	var stderr syncBuffer
+	go func() {
+		done <- Execute(ctx, []string{"serve", "--host", "127.0.0.1", "--port", "0", "--data-dir", dir}, pw, &stderr)
+		_ = pw.Close()
+	}()
+	lineCh := make(chan string, 1)
+	go func() {
+		s := bufio.NewScanner(pr)
+		if s.Scan() {
+			lineCh <- s.Text()
+		}
+		_, _ = io.Copy(io.Discard, pr)
+	}()
+	var line string
+	select {
+	case line = <-lineCh:
+	case <-time.After(60 * time.Second):
+		t.Fatal("no ready line")
+	}
+	var ready struct{ Port int }
+	_ = json.Unmarshal([]byte(strings.TrimPrefix(line, ReadyLinePrefix)), &ready)
+	base := "http://127.0.0.1:" + strconv.Itoa(ready.Port)
+
+	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(stderr.String())
+	if m == nil {
+		t.Fatalf("no one-time password on stderr:\n%s", stderr.String())
+	}
+	res, err := http.Post(base+"/api/v1/auth/login", "application/json", strings.NewReader(`{"password":"`+m[1]+`"}`))
+	if err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("login with the printed password: %v %v", err, res)
+	}
+	res.Body.Close()
+
+	if code, out, errs := run(t, "healthcheck", "--url", base+"/healthz"); code != ExitOK || strings.TrimSpace(out) != "ok" {
+		t.Fatalf("healthcheck: %d %q %q", code, out, errs)
+	}
+	if code, _, _ := run(t, "healthcheck", "--url", "http://127.0.0.1:1/healthz", "--timeout", "1s"); code != ExitFailure {
+		t.Fatalf("healthcheck of nothing: %d", code)
+	}
+
+	// A reset prints a new password and the old one stops working.
+	code, out, _ := run(t, "admin", "reset-password", "--data-dir", dir)
+	m2 := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(out)
+	if code != ExitOK || m2 == nil || m2[1] == m[1] {
+		t.Fatalf("reset: %d %q", code, out)
+	}
+	res, _ = http.Post(base+"/api/v1/auth/login", "application/json", strings.NewReader(`{"password":"`+m[1]+`"}`))
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old password still accepted: %d", res.StatusCode)
+	}
+	res.Body.Close()
+
+	cancel()
+	select {
+	case code := <-done:
+		if code != ExitOK {
+			t.Fatalf("serve exit code %d", code)
+		}
+	case <-time.After(30 * time.Second):
 		t.Fatal("serve did not shut down")
 	}
 }

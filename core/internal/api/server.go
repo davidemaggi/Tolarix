@@ -51,6 +51,8 @@ type Config struct {
 	DB           Pinger
 	Logger       *slog.Logger
 	UI           fs.FS // nil uses the embedded build
+	// API serves the JSON API; nil answers 404 on /api/v1 (bare shell tests).
+	API *Backend
 }
 
 const (
@@ -69,7 +71,7 @@ func NewHandler(cfg Config) http.Handler {
 	}
 	r := chi.NewRouter()
 	// No middleware.RealIP: it trusts X-Forwarded-For blindly (IP spoofing).
-	// Client IPs for login rate limiting come with a trusted-proxy setting in M3.
+	// Client IPs come from auth.ClientIP with the trusted-proxy setting.
 	r.Use(middleware.RequestID)
 	r.Use(recoverer(cfg.Logger))
 	r.Use(requestLogger(cfg.Logger))
@@ -82,6 +84,9 @@ func NewHandler(cfg Config) http.Handler {
 			r.Use(desktopToken(cfg.DesktopToken))
 		}
 		r.Route("/api/v1", func(r chi.Router) {
+			if cfg.API != nil {
+				mountAPI(r, cfg.Mode, cfg.Logger, *cfg.API)
+			}
 			r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 				writeError(w, http.StatusNotFound, "not_found", "No such API endpoint.")
 			})

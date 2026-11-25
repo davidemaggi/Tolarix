@@ -58,6 +58,27 @@ func (s *Store) LockHolder(ctx context.Context, flowID string) (*LockInfo, error
 	return &li, nil
 }
 
+// ActiveLocks returns every held lock by flow id (stale ones included: the
+// caller decides, by HeartbeatAt, whether a run still looks alive).
+func (s *Store) ActiveLocks(ctx context.Context) (map[string]LockInfo, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT flow_id, run_id, holder, acquired_at, heartbeat_at FROM flow_locks`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]LockInfo{}
+	for rows.Next() {
+		var flowID, acq, hb string
+		var li LockInfo
+		if err := rows.Scan(&flowID, &li.RunID, &li.Holder, &acq, &hb); err != nil {
+			return nil, err
+		}
+		li.AcquiredAt, li.HeartbeatAt = parseTime(acq), parseTime(hb)
+		out[flowID] = li
+	}
+	return out, rows.Err()
+}
+
 // HeartbeatLock refreshes the lock; it fails if the lock was taken over.
 func (s *Store) HeartbeatLock(ctx context.Context, flowID, runID string) error {
 	res, err := s.DB.ExecContext(ctx, `UPDATE flow_locks SET heartbeat_at = ? WHERE flow_id = ? AND run_id = ?`, now(), flowID, runID)

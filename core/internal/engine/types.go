@@ -31,6 +31,8 @@ type Options struct {
 	Attachments *bool `json:"attachments,omitempty"`
 	// Banner adds a "this page is mirrored" notice at the top of every page.
 	Banner bool `json:"banner"`
+	// BannerText replaces the default banner sentence ("{master}" = Master name).
+	BannerText string `json:"bannerText,omitempty"`
 	// AdoptExisting lets Tolarix take over pages it did not create when they
 	// sit exactly where a mirrored page goes. Off by default: they are left
 	// alone and that page fails with an explanation.

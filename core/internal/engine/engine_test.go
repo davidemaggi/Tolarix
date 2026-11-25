@@ -271,6 +271,17 @@ func TestBanner(t *testing.T) {
 	}
 }
 
+func TestBannerText(t *testing.T) {
+	got := BannerText("Wiki", "Copia di {master}.\nNon modificare. ")
+	want := "> [!warning]\n> Copia di Wiki.\n> Non modificare.\n\n"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	if !strings.Contains(BannerText("Wiki", "  "), "mirrored from Wiki") {
+		t.Fatal("blank custom text should fall back to the default")
+	}
+}
+
 func TestScopeSelectedReroots(t *testing.T) {
 	h := newHarness(t)
 	h.scope = Scope{Mode: "selected", Include: []string{"docs/a", "missing"}, Exclude: nil}

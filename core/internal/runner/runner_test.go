@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -177,5 +178,101 @@ func TestMissingMirrorIsAFailedTarget(t *testing.T) {
 	res := e.run(false)
 	if res.Run.Status != store.RunFailed || len(res.Report.Targets) != 1 || res.Report.Targets[0].Error == "" {
 		t.Fatalf("%s %+v", res.Run.Status, res.Report.Targets)
+	}
+}
+
+func TestBackgroundStartNotifyShutdown(t *testing.T) {
+	e := newE2E(t, engine.Options{})
+	hub := NewHub()
+	var mu sync.Mutex
+	notified := 0
+	e.r.Notify = func(id string) { mu.Lock(); notified++; mu.Unlock(); hub.Notify(id) }
+	bg := NewBackground(e.r)
+
+	run, err := bg.Start(e.flow, TriggerManual, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != store.RunRunning || run.FlowName != e.flow.Name {
+		t.Fatalf("started run %+v", run)
+	}
+	if _, err := bg.Start(e.flow, TriggerManual, true); !errors.Is(err, ErrLocked) {
+		// The first run may already be done on a fast machine; then a second start is fine.
+		if err != nil {
+			t.Fatalf("second start: %v", err)
+		}
+	}
+	got := waitRun(t, e.st, run.ID)
+	if got.Status != store.RunSucceeded || !got.DryRun || got.Trigger != TriggerManual {
+		t.Fatalf("final run %+v", got)
+	}
+	if err := bg.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	n := notified
+	mu.Unlock()
+	if n < 3 {
+		t.Fatalf("expected notifications for log lines and the end, got %d", n)
+	}
+	if bg.Cancel(run.ID) || bg.Running(run.ID) {
+		t.Fatal("a finished run cannot be cancelled")
+	}
+}
+
+func TestBackgroundShutdownStoresAFinalStatus(t *testing.T) {
+	e := newE2E(t, engine.Options{})
+	bg := NewBackground(e.r)
+	run, err := bg.Start(e.flow, TriggerManual, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bg.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := e.st.GetRun(context.Background(), run.ID)
+	// Usually cancelled; a very fast machine may finish the tiny vault first.
+	if got.Status != store.RunCancelled && got.Status != store.RunSucceeded {
+		t.Fatalf("status %s", got.Status)
+	}
+	if li, _ := e.st.LockHolder(context.Background(), e.flow.ID); li != nil {
+		t.Fatal("lock left behind")
+	}
+}
+
+func waitRun(t *testing.T, st *store.Store, id string) store.Run {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		r, err := st.GetRun(context.Background(), id)
+		if err == nil && r.Status != store.RunRunning {
+			return r
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("run did not finish")
+	return store.Run{}
+}
+
+func TestHub(t *testing.T) {
+	h := NewHub()
+	ch, unsub := h.Subscribe("r1")
+	h.Notify("r1")
+	h.Notify("r1") // coalesced, never blocks
+	h.Notify("r2")
+	select {
+	case <-ch:
+	default:
+		t.Fatal("no signal")
+	}
+	select {
+	case <-ch:
+		t.Fatal("signals should coalesce")
+	default:
+	}
+	unsub()
+	h.Notify("r1")
+	if len(h.subs) != 0 {
+		t.Fatal("subscription not removed")
 	}
 }

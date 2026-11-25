@@ -33,9 +33,22 @@ type Request struct {
 }
 
 // BannerText is prepended (as a canonical callout) when Options.Banner is on.
-func BannerText(source string) string {
-	return "> [!warning] Mirrored page\n> This page is mirrored from " + source +
-		". Changes made here will be overwritten.\n\n"
+// custom replaces the default English sentence; "{master}" in it is replaced
+// by the Master connection name.
+func BannerText(source, custom string) string {
+	custom = strings.TrimSpace(custom)
+	if custom == "" {
+		return "> [!warning] Mirrored page\n> This page is mirrored from " + source +
+			". Changes made here will be overwritten.\n\n"
+	}
+	custom = strings.ReplaceAll(custom, "{master}", source)
+	var b strings.Builder
+	b.WriteString("> [!warning]\n")
+	for _, line := range strings.Split(strings.ReplaceAll(custom, "\r\n", "\n"), "\n") {
+		b.WriteString(strings.TrimRight("> "+line, " ") + "\n")
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 // Run executes the request. It returns an error only when nothing could be
@@ -63,7 +76,7 @@ func (e *Engine) Run(ctx context.Context, req Request) (*Report, error) {
 		blobs = pipe
 	}
 	if req.Options.Banner {
-		banner := BannerText(firstNonEmpty(req.SourceName, "the Master wiki"))
+		banner := BannerText(firstNonEmpty(req.SourceName, "the Master wiki"), req.Options.BannerText)
 		for _, p := range tree.Pages {
 			if !p.Placeholder {
 				p.Body = banner + p.Body

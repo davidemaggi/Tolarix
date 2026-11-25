@@ -1,0 +1,9 @@
+package: oapi
+output: oapi.gen.go
+generate:
+  models: true
+  chi-server: true
+output-options:
+  skip-prune: true
+compatibility:
+  always-prefix-enum-values: true

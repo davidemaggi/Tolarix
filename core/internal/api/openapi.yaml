@@ -1,0 +1,758 @@
+openapi: 3.0.3
+info:
+  title: Tolarix API
+  version: "1"
+  description: |
+    HTTP API of a Tolarix server. This file is the contract: the Go server
+    interface (internal/api/oapi) and the web client types
+    (web/src/api/schema.gen.ts) are generated from it. Run `pnpm generate`
+    from the repository root after editing it.
+
+    Authentication (web mode): sign in with POST /auth/login; the server sets
+    an HttpOnly session cookie. Every request that changes something
+    (POST/PUT/DELETE) must also send the session's CSRF token, returned by
+    GET /auth/session, in the X-CSRF-Token header. While the admin still has
+    a one-time password, every endpoint except /auth/* answers 403
+    password_change_required.
+
+    Desktop mode: no sign-in; requests carry the launch token (cookie or
+    X-Tolarix-Token header) and the CSRF header.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: connections
+  - name: flows
+  - name: runs
+
+paths:
+  /auth/session:
+    get:
+      tags: [auth]
+      operationId: getSession
+      summary: Who am I, and what this server is
+      security: []
+      responses:
+        "200":
+          description: Session state (also when signed out)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Sign in as admin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in; the session cookie is set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Sign out
+      responses:
+        "204": { description: Signed out }
+  /auth/password:
+    post:
+      tags: [auth]
+      operationId: changePassword
+      summary: Change the admin password (web mode)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "200":
+          description: Changed; other sessions are signed out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /connector-kinds:
+    get:
+      tags: [connections]
+      operationId: listConnectorKinds
+      summary: Wiki types this server supports
+      responses:
+        "200":
+          description: Connector kinds
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ConnectorKind" }
+
+  /connections:
+    get:
+      tags: [connections]
+      operationId: listConnections
+      responses:
+        "200":
+          description: Connections, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Connection" }
+    post:
+      tags: [connections]
+      operationId: createConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /connections/test:
+    post:
+      tags: [connections]
+      operationId: testConnection
+      summary: Test connection settings, saved or not
+      description: |
+        Tests the given settings. When editing a saved connection, pass its
+        connectionId and omit secret to test with the stored secret.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionTestRequest" }
+      responses:
+        "200":
+          description: Test outcome (a failed test is still a 200)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestResult" }
+        "400": { $ref: "#/components/responses/Error" }
+  /connections/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [connections]
+      operationId: getConnection
+      responses:
+        "200":
+          description: The connection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [connections]
+      operationId: updateConnection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Connection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [connections]
+      operationId: deleteConnection
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /connections/{id}/browse:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [connections]
+      operationId: browseConnection
+      summary: List pages under a parent, for the scope picker
+      parameters:
+        - name: parent
+          in: query
+          description: Parent page id; omit for the top level
+          schema: { type: string }
+      responses:
+        "200":
+          description: Child pages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BrowseNode" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /flows:
+    get:
+      tags: [flows]
+      operationId: listFlows
+      responses:
+        "200":
+          description: Flows, by name, with their last run
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Flow" }
+    post:
+      tags: [flows]
+      operationId: createFlow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlowInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Flow" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /flows/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [flows]
+      operationId: getFlow
+      responses:
+        "200":
+          description: The flow
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Flow" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [flows]
+      operationId: updateFlow
+      description: Mirrors passed back with their id keep their history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FlowInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Flow" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [flows]
+      operationId: deleteFlow
+      description: Deletes the flow and its run history. Mirror pages are left as they are.
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /flows/{id}/runs:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [runs]
+      operationId: startRun
+      summary: Run a flow now (or a dry-run)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartRunRequest" }
+      responses:
+        "202":
+          description: Started; follow it with /runs/{id}/stream
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /runs:
+    get:
+      tags: [runs]
+      operationId: listRuns
+      parameters:
+        - { name: flowId, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/RunStatus" } }
+        - { name: dryRun, in: query, schema: { type: boolean } }
+        - name: before
+          in: query
+          description: Run id; returns older runs (the nextBefore of the previous page)
+          schema: { type: string }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunList" }
+        "400": { $ref: "#/components/responses/Error" }
+  /runs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [runs]
+      operationId: getRun
+      responses:
+        "200":
+          description: The run with its report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+  /runs/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [runs]
+      operationId: cancelRun
+      summary: Stop a run started by this server
+      responses:
+        "202": { description: Cancellation requested }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /runs/{id}/events:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [runs]
+      operationId: listRunEvents
+      parameters:
+        - { name: after, in: query, description: Return events with a larger id, schema: { type: integer, format: int64, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 5000, default: 1000 } }
+      responses:
+        "200":
+          description: Log lines, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RunEvent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /runs/{id}/stream:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [runs]
+      operationId: streamRun
+      summary: Live log (Server-Sent Events)
+      description: |
+        Replays the stored log lines, then streams new ones until the run
+        ends. Each line is an `event: log` whose data is a RunEvent and whose
+        id is the event id (reconnects resume with Last-Event-ID). The stream
+        ends with an `event: end` whose data is the final Run.
+      responses:
+        "200":
+          description: An event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code (e.g. not_found, validation, locked)
+            message:
+              type: string
+              description: Plain-language explanation for the user
+            fields:
+              type: object
+              description: Per-field validation messages, keyed by field path
+              additionalProperties: { type: string }
+
+    Session:
+      type: object
+      required: [authenticated, mode, mustChangePassword, version]
+      properties:
+        authenticated: { type: boolean }
+        mode: { type: string, enum: [web, desktop] }
+        mustChangePassword: { type: boolean }
+        csrfToken:
+          type: string
+          description: Send it as X-CSRF-Token on every POST/PUT/DELETE
+        version: { type: string }
+        timezone:
+          type: string
+          description: The server's IANA timezone, the default for schedules
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string, minLength: 12 }
+
+    ConnectorField:
+      type: object
+      required: [name, type, required]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [string, url, path, secret, bool] }
+        required: { type: boolean }
+        secret: { type: boolean }
+    ConnectorKind:
+      type: object
+      required: [kind, displayName, canRead, canWrite, fields, locationFields]
+      properties:
+        kind: { type: string }
+        displayName: { type: string }
+        canRead: { type: boolean, description: Can be a Master }
+        canWrite: { type: boolean, description: Can be a Mirror }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectorField" }
+        locationFields:
+          type: array
+          description: Fields of a Mirror location (where to write inside the wiki)
+          items: { $ref: "#/components/schemas/ConnectorField" }
+
+    Config:
+      type: object
+      description: Connector-specific settings (see ConnectorKind.fields)
+      additionalProperties: true
+      x-go-type: json.RawMessage
+      x-go-type-import: { path: encoding/json }
+    Connection:
+      type: object
+      required: [id, name, kind, config, hasSecret, usedBy, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        config: { $ref: "#/components/schemas/Config" }
+        hasSecret:
+          type: boolean
+          description: A secret is stored. Secrets are never returned.
+        usedBy:
+          type: array
+          description: Flows using this connection (it cannot be deleted while used)
+          items: { $ref: "#/components/schemas/FlowRef" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConnectionInput:
+      type: object
+      required: [name, kind, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        kind: { type: string }
+        config: { $ref: "#/components/schemas/Config" }
+        secret:
+          type: string
+          nullable: true
+          description: Omit (or null) to keep the stored secret; "" removes it
+    ConnectionTestRequest:
+      type: object
+      required: [kind, config]
+      properties:
+        kind: { type: string }
+        config: { $ref: "#/components/schemas/Config" }
+        secret: { type: string, nullable: true }
+        connectionId:
+          type: string
+          description: Use this saved connection's secret when secret is omitted
+    TestResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+    BrowseNode:
+      type: object
+      required: [id, title, hasChildren]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        hasChildren: { type: boolean }
+
+    FlowRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Scope:
+      type: object
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [all, selected] }
+        include:
+          type: array
+          description: Subtree roots to mirror (mode "selected")
+          items: { type: string }
+        exclude:
+          type: array
+          description: Subtrees left out (either mode)
+          items: { type: string }
+    FlowOptions:
+      type: object
+      properties:
+        deletePolicy:
+          type: string
+          enum: [archive, delete, keep]
+          description: What happens on a Mirror when a page leaves the Master (default archive)
+        attachments: { type: boolean, description: Copy attachments (default true) }
+        banner: { type: boolean, description: Add a "mirrored page" notice to every page }
+        bannerText:
+          type: string
+          maxLength: 1000
+          description: Replaces the default banner sentence; "{master}" becomes the Master name
+        adoptExisting:
+          type: boolean
+          description: Take over pages Tolarix did not create when they sit exactly where a mirrored page goes
+    Schedule:
+      type: object
+      description: When the flow runs by itself. Only "manual" until the built-in scheduler ships.
+      required: [kind]
+      properties:
+        kind: { type: string }
+      additionalProperties: true
+      x-go-type: json.RawMessage
+      x-go-type-import: { path: encoding/json }
+    FlowTarget:
+      type: object
+      required: [connectionId, location]
+      properties:
+        id:
+          type: string
+          description: Keep it when updating so the Mirror keeps its page mapping
+        connectionId: { type: string }
+        location: { $ref: "#/components/schemas/Config" }
+    Mirror:
+      type: object
+      description: A saved Mirror of a flow
+      required: [id, connectionId, location]
+      properties:
+        id: { type: string }
+        connectionId: { type: string }
+        location: { $ref: "#/components/schemas/Config" }
+    FlowInput:
+      type: object
+      required: [name, sourceConnectionId, scope, options, targets]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        enabled: { type: boolean, default: true }
+        sourceConnectionId: { type: string }
+        scope: { $ref: "#/components/schemas/Scope" }
+        options: { $ref: "#/components/schemas/FlowOptions" }
+        schedule: { $ref: "#/components/schemas/Schedule" }
+        scheduleEnabled: { type: boolean, default: true }
+        timezone: { type: string }
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/FlowTarget" }
+    Flow:
+      type: object
+      required:
+        [id, name, enabled, sourceConnectionId, scope, options, schedule, scheduleEnabled, timezone, targets, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        sourceConnectionId: { type: string }
+        scope: { $ref: "#/components/schemas/Scope" }
+        options: { $ref: "#/components/schemas/FlowOptions" }
+        schedule: { $ref: "#/components/schemas/Schedule" }
+        scheduleEnabled: { type: boolean }
+        timezone: { type: string }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/Mirror" }
+        lastRun: { $ref: "#/components/schemas/Run" }
+        running: { $ref: "#/components/schemas/RunningInfo" }
+        nextRunAt:
+          type: string
+          format: date-time
+          description: Next scheduled run (empty until the built-in scheduler ships)
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RunningInfo:
+      type: object
+      required: [runId, startedAt, holder]
+      properties:
+        runId: { type: string }
+        startedAt: { type: string, format: date-time }
+        holder: { type: string, description: Host/process running it (the CLI or this server) }
+
+    StartRunRequest:
+      type: object
+      properties:
+        dryRun: { type: boolean, default: false }
+    RunTrigger:
+      type: string
+      enum: [manual, schedule, cli, run-due]
+    RunStatus:
+      type: string
+      enum: [running, succeeded, partial, failed, cancelled]
+    Counts:
+      type: object
+      required: [created, updated, moved, deleted, archived, kept, unchanged, failed, attachmentsUploaded, attachmentsDeleted]
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        moved: { type: integer }
+        deleted: { type: integer }
+        archived: { type: integer }
+        kept: { type: integer }
+        unchanged: { type: integer }
+        failed: { type: integer }
+        attachmentsUploaded: { type: integer }
+        attachmentsDeleted: { type: integer }
+    Run:
+      type: object
+      required: [id, flowId, flowName, trigger, dryRun, status, startedAt, counts]
+      properties:
+        id: { type: string }
+        flowId: { type: string }
+        flowName: { type: string }
+        trigger: { $ref: "#/components/schemas/RunTrigger" }
+        dryRun: { type: boolean }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        counts: { $ref: "#/components/schemas/Counts" }
+        error: { type: string }
+    RunList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Run" }
+        nextBefore:
+          type: string
+          description: Pass as `before` to get the next page; absent on the last page
+    RunDetail:
+      allOf:
+        - $ref: "#/components/schemas/Run"
+        - type: object
+          required: [report]
+          properties:
+            report: { $ref: "#/components/schemas/Report" }
+    Warning:
+      type: object
+      required: [code, message]
+      properties:
+        pageId: { type: string }
+        code: { type: string }
+        message: { type: string }
+    Op:
+      type: object
+      required: [kind, sourceId, title]
+      properties:
+        kind: { type: string, enum: [create, update, move, delete, archive, keep, unchanged, conflict] }
+        sourceId: { type: string }
+        title: { type: string }
+        from: { type: string }
+        to: { type: string }
+        reason: { type: string }
+        error: { type: string }
+    AttachmentOp:
+      type: object
+      required: [kind, hash, key]
+      properties:
+        kind: { type: string, enum: [upload, delete] }
+        hash: { type: string }
+        name: { type: string }
+        key: { type: string }
+        error: { type: string }
+    TargetReport:
+      type: object
+      required: [targetId, name, counts, ops]
+      properties:
+        targetId: { type: string }
+        name: { type: string }
+        counts: { $ref: "#/components/schemas/Counts" }
+        ops:
+          type: array
+          items: { $ref: "#/components/schemas/Op" }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/AttachmentOp" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/Warning" }
+        error: { type: string, description: The Mirror could not be synced at all }
+    Report:
+      type: object
+      required: [dryRun, pages, counts, targets]
+      properties:
+        dryRun: { type: boolean }
+        pages: { type: integer, description: Master pages in scope }
+        counts: { $ref: "#/components/schemas/Counts" }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/TargetReport" }
+        warnings:
+          type: array
+          description: Master-side warnings
+          items: { $ref: "#/components/schemas/Warning" }
+    RunEvent:
+      type: object
+      required: [id, runId, time, level, msg, attrs]
+      properties:
+        id: { type: integer, format: int64 }
+        runId: { type: string }
+        time: { type: string, format: date-time }
+        level: { type: string, enum: [DEBUG, INFO, WARN, ERROR] }
+        msg: { type: string }
+        attrs:
+          type: object
+          additionalProperties: { type: string }
