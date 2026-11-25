@@ -12,7 +12,7 @@ Everything needed to pick the project up on a new PC. Status and decisions:
 | pnpm | 10.x (see `packageManager` in `package.json`) | `corepack enable` installs the right one |
 | golangci-lint | v2 | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` |
 | Rust + Tauri prerequisites | stable | only from milestone 7 (desktop) |
-| Docker | any recent | only from milestone 3 (image) |
+| Docker | any recent | to build the image (`deploy/`) |
 
 ## First run
 
@@ -24,6 +24,39 @@ pnpm build              # builds the web UI, copies it into core/internal/webui/
 ```
 
 `./data` is git-ignored. Never commit a `tolarix.db` or a `secret.key`.
+
+On the first start in web mode the server creates the `admin` account and prints a
+one-time password once, in a box on stderr. Sign in with it; the UI then asks for a new
+password (at least 12 characters). Lost it? `tolarix admin reset-password --data-dir ./data`
+prints a new one-time password and signs out every session. Desktop mode
+(`--mode desktop`) has no sign-in; it is protected by the launch token instead.
+
+## Docker
+
+```sh
+docker build -f deploy/Dockerfile -t tolarix --build-arg VERSION=dev .
+docker compose -f deploy/docker-compose.yml up -d      # data volume + ./deploy/vaults mounted at /vaults
+docker compose -f deploy/docker-compose.yml logs       # the one-time password
+docker exec -it <container> /tolarix admin reset-password
+```
+
+The image is distroless (no shell), runs as uid 65532, keeps everything in the `/data`
+volume (database + `secret.key`: back them up together) and has a `HEALTHCHECK` that runs
+`/tolarix healthcheck`. Obsidian vaults must be mounted; connections use the path inside
+the container.
+
+## Configuration (environment)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TOLARIX_DATA_DIR` | OS app-data folder (`/data` in Docker) | database, `secret.key` |
+| `TOLARIX_MODE` | `web` | `web` (admin login) or `desktop` (launch token, 127.0.0.1 only) |
+| `TOLARIX_HOST` / `TOLARIX_PORT` | `0.0.0.0` / `8080` | listen address in web mode |
+| `TOLARIX_TIMEZONE` | `TZ`, else `UTC` | default timezone for schedules, shown in the UI |
+| `TOLARIX_TRUSTED_PROXIES` | none | comma-separated IPs/CIDRs whose `X-Forwarded-For`/`X-Forwarded-Proto` are trusted (rate limit, Secure cookies) |
+| `TOLARIX_COOKIE_SECURE` | `auto` | `auto` (Secure when the request is HTTPS), `true`, `false` |
+| `TOLARIX_HEALTHCHECK_URL` | `http://127.0.0.1:$TOLARIX_PORT/healthz` | URL used by `tolarix healthcheck` |
+| `TOLARIX_LOG_LEVEL` / `TOLARIX_LOG_FORMAT` | `info` / `text` | logging (stderr) |
 
 ## Day-to-day
 
@@ -37,18 +70,42 @@ gofmt -l .
 # Web (from web/)
 pnpm dev                # Vite on :5173, proxies /api and /healthz to :8080 (override: TOLARIX_DEV_BACKEND)
 pnpm test               # Vitest
+pnpm test:e2e           # Playwright: builds ./core into a temp dir and runs it in web mode (run `pnpm build` first)
 pnpm lint && pnpm typecheck
 pnpm format             # Prettier
+
+# Both (from the root), after editing core/internal/api/openapi.yaml
+pnpm generate           # Go server stubs (oapi-codegen) + web/src/api/schema.gen.ts; CI fails if they are stale
 ```
 
-Run `tolarix serve` in a second terminal while using `pnpm dev`.
+Run `tolarix serve` (web mode) in a second terminal while using `pnpm dev`, and sign in once:
+the session lasts 7 days.
+
+## API
+
+- The contract is `core/internal/api/openapi.yaml` (OpenAPI 3). Change it first, run
+  `pnpm generate`, then implement the handler (`internal/api/oapi` holds the generated
+  strict-server interface) and use the typed client (`web/src/api/client.ts`, openapi-fetch).
+- Errors are `{"error": {"code", "message", "fields"}}`. `code` is stable (the UI maps known codes to
+  translated text in `web/src/lib/errors.ts`); `fields` holds per-field validation messages
+  (English for now).
+- Auth (web mode): `POST /api/v1/auth/login` sets an HttpOnly session cookie;
+  `GET /api/v1/auth/session` returns the CSRF token, which every POST/PUT/DELETE sends as
+  `X-CSRF-Token`. Sessions expire after 7 days idle or 30 days. Logins are rate-limited per client IP
+  (10 failures per 15 minutes). While the one-time password is unchanged, only the session,
+  password and logout endpoints work (`403 password_change_required`).
+- Live logs: `GET /api/v1/runs/{id}/stream` is Server-Sent Events (`log` events with ids, then one
+  `end` event). It replays stored lines first and resumes from `Last-Event-ID`.
+- `GET /healthz` is unauthenticated (database check + version); `tolarix healthcheck` calls it.
 
 ## Layout
 
 ```
 core/                     Go module github.com/davidemaggi/tolarix/core
   cmd/tolarix/            main: the single binary (server + scheduler + CLI)
-  internal/api/           HTTP: /healthz, /api/v1, desktop token, security headers
+  internal/api/           HTTP: /healthz, /api/v1 handlers, SSE logs, desktop token, security headers
+    openapi.yaml          the API contract; oapi/ is generated from it (`pnpm generate`)
+  internal/auth/          admin password (argon2id), sessions, CSRF, login rate limit, trusted proxies
   internal/buildinfo/     version injected via -ldflags (see scripts/build-core.mjs)
   internal/cli/           cobra commands; exit codes are in root.go and are a public contract
   internal/connectors/    the Source/Target/Session contract + registry
@@ -66,8 +123,13 @@ core/                     Go module github.com/davidemaggi/tolarix/core
   internal/testkit/       golden-file helpers and the YAML fixture form of a canonical tree
   internal/webui/         embedded SPA (dist/ is generated; only .gitkeep is tracked)
 web/                      React + Vite + TS + Tailwind v4 + shadcn/ui
+  src/api/                typed client (schema.gen.ts is generated), TanStack Query hooks, SSE hook
+  src/pages/              one file per route (lazy-loaded except the dashboard)
   src/components/ui/      shadcn primitives (add more with `pnpm dlx shadcn@latest add <name>`)
   src/i18n/locales/       en.json, it.json — a test fails if their keys differ
+  src/test/               test helpers: renderApp, a fake API (mockApi) and a fake EventSource
+  e2e/                    Playwright tests against the real binary
+deploy/                   Dockerfile, docker-compose.yml
 scripts/build-core.mjs    cross-platform go build with version ldflags
 docs/dev/                 this guide, plan + status, design notes
 ```
@@ -120,4 +182,9 @@ cd core && go test ./... -update   # rewrite golden files, then review the diff 
 - The first `go test` on a new machine is slow (minutes): `modernc.org/sqlite` is a large package to compile. Later runs are cached.
 - No inline `<script>` in `web/index.html`: the server's Content-Security-Policy blocks it.
 - Editing tools on Windows may turn `"﻿"` in Go source into a literal BOM, which Go rejects. Write `string(rune(0xFEFF))` instead.
+- Web tests run in jsdom, which lacks `ResizeObserver`, pointer capture and `scrollIntoView`; Radix needs them,
+  so `src/test/setup.ts` stubs them. Node's `Request` rejects relative URLs, which is why the API client's
+  `baseUrl` is made absolute from `window.location.origin`.
+- Playwright's `getByLabel`/`getByRole` match substrings by default ("New password" also matches "Repeat the new
+  password"): pass `{ exact: true }`.
 - File names with spaces in fixtures: quote them in shell loops (`find -print0 | while read -d ''`), and never `cat` an unquoted name that might be `-`.

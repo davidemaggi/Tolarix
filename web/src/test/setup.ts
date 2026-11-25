@@ -23,6 +23,16 @@ if (typeof window.matchMedia !== "function") {
   });
 }
 
+// jsdom lacks these; Radix calls them.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.scrollIntoView ??= () => {};
+
 beforeEach(async () => {
   window.localStorage.clear();
   document.documentElement.className = "";

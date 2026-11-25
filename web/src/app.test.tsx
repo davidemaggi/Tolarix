@@ -2,45 +2,38 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 
-import { THEME_STORAGE_KEY } from "@/lib/theme";
 import { LANGUAGE_STORAGE_KEY } from "@/i18n";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
+import { mockApi } from "@/test/api";
 import { renderApp } from "@/test/render";
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () =>
-      Response.json({ status: "ok", database: "ok", version: "1.2.3" }, { status: 200 }),
-    ),
-  );
+  mockApi();
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("app shell", () => {
   it("renders the dashboard and the server status", async () => {
     renderApp();
-    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
     expect(await screen.findByText(/Running, version 1\.2\.3/)).toBeInTheDocument();
   });
 
   it("navigates with the main navigation", async () => {
     const user = userEvent.setup();
     renderApp();
-    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const nav = await screen.findByRole("navigation", { name: "Main navigation" });
     await user.click(within(nav).getAllByRole("link", { name: "Flows" })[0]!);
-    expect(screen.getByRole("heading", { level: 1, name: "Flows" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Flows" })).toBeInTheDocument();
   });
 
-  it("shows a not-found page for unknown routes", () => {
+  it("shows a not-found page for unknown routes", async () => {
     renderApp("/nope");
-    expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Page not found" })).toBeInTheDocument();
   });
 
   it("reports an unreachable server", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("", { status: 503 })),
-    );
+    mockApi({ "GET /healthz": () => new Response("", { status: 503 }) });
     renderApp();
     expect(await screen.findByText(/Not reachable/, {}, { timeout: 3000 })).toBeInTheDocument();
   });
@@ -50,7 +43,7 @@ describe("language switcher", () => {
   it("switches to Italian, persists the choice and sets <html lang>", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByRole("button", { name: "Change language" }));
+    await user.click(await screen.findByRole("button", { name: "Change language" }));
     await user.click(await screen.findByRole("menuitemradio", { name: "Italiano" }));
 
     expect(
@@ -66,7 +59,7 @@ describe("theme toggle", () => {
     const user = userEvent.setup();
     renderApp();
 
-    await user.click(screen.getByRole("button", { name: "Change theme" }));
+    await user.click(await screen.findByRole("button", { name: "Change theme" }));
     await user.click(await screen.findByRole("menuitemradio", { name: "Dark" }));
     await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
@@ -80,7 +73,7 @@ describe("theme toggle", () => {
   it("is reachable by keyboard", async () => {
     const user = userEvent.setup();
     renderApp();
-    const trigger = screen.getByRole("button", { name: "Change theme" });
+    const trigger = await screen.findByRole("button", { name: "Change theme" });
     trigger.focus();
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("menu")).toBeInTheDocument();

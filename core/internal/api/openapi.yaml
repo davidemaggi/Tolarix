@@ -551,7 +551,7 @@ components:
         banner: { type: boolean, description: Add a "mirrored page" notice to every page }
         bannerText:
           type: string
-          maxLength: 1000
+          maxLength: 2000
           description: Replaces the default banner sentence; "{master}" becomes the Master name
         adoptExisting:
           type: boolean

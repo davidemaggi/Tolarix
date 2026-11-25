@@ -1,21 +1,26 @@
-import { Cable, LayoutDashboard, Settings, Workflow } from "lucide-react";
+import { Cable, History, LayoutDashboard, LogOut, Settings, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router";
 
+import { useLogout, useSession } from "@/api/queries";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ServerStatus } from "@/components/server-status";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", key: "nav.dashboard", icon: LayoutDashboard, end: true },
   { to: "/connections", key: "nav.connections", icon: Cable, end: false },
   { to: "/flows", key: "nav.flows", icon: Workflow, end: false },
+  { to: "/runs", key: "nav.runs", icon: History, end: false },
   { to: "/settings", key: "nav.settings", icon: Settings, end: false },
 ] as const;
 
 export function AppLayout() {
   const { t } = useTranslation();
+  const session = useSession();
+  const logout = useLogout();
   return (
     <div className="flex min-h-svh flex-col">
       <a
@@ -54,6 +59,18 @@ export function AppLayout() {
           <div className="flex items-center gap-1">
             <LanguageSwitcher />
             <ThemeToggle />
+            {session.data?.mode === "web" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+                aria-label={t("auth.signOut")}
+                title={t("auth.signOut")}
+              >
+                <LogOut aria-hidden="true" />
+              </Button>
+            )}
           </div>
         </div>
       </header>

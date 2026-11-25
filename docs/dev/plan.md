@@ -11,8 +11,8 @@ The original product brief is in [brief.md](brief.md).
 | # | Milestone | Status | Branch / notes |
 |---|---|---|---|
 | 1 | Scaffold: Go core, SQLite + migrations, CLI skeleton, React + shadcn, i18n en/it, theme, CI | done | `develop` |
-| 2 | Canonical model, Obsidian connector, sync engine + mapping, dry-run, `flow run` CLI, renderer pipeline (interface) | **done, awaiting review** | `develop` |
-| 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | | |
+| 2 | Canonical model, Obsidian connector, sync engine + mapping, dry-run, `flow run` CLI, renderer pipeline (interface) | done | `develop` |
+| 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | **done, awaiting review** | `develop` |
 | 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | | |
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | | |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | | |
@@ -23,10 +23,10 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 ### Where we left off (2026-11-25)
 
-- M2 is committed and pushed on `develop`. The product owner has not reviewed it yet: start the next session by asking for that review and approval to begin M3.
+- M2 was approved ("continua con l'implementazione") and M3 is committed on `develop` (not pushed). Start the next session by asking for the M3 review and approval to begin M4.
 - **Open question for the product owner:** CI (`.github/workflows/ci.yml`) only runs on `main` and on pull requests, so the README badge has no status for `develop`. Should `develop` be added to the push triggers?
-- Defaults chosen in M2 that are awaiting review are listed under "Taken during M2" below.
-- **Next: M3.** OpenAPI contract, single-admin auth, dashboard, connection and flow wizards, run history with live logs (SSE), Docker image.
+- Defaults chosen in M2 and M3 that are awaiting review are listed under "Taken during M2" and "Taken during M3" below.
+- **Next: M4.** Confluence Data Center/Server and Azure DevOps Code wiki connectors, storage-format converter, draw.io renderer.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -75,10 +75,23 @@ Taken during M2:
 - **CLI short ids** are the last 8 characters of a UUIDv7 (the first characters are a timestamp shared by ids created together). `runs show` accepts them.
 - `tolarix flow import <file.yaml>` creates/updates connections and flows by name (mirrors keep their id, and so their history, when the connection and location are unchanged). Secrets come from `secretEnv: VAR`. Example: [../examples/flows.example.yaml](../examples/flows.example.yaml).
 
+Taken during M3:
+- **Auth**: one `admin` account. The first start prints a one-time password once (boxed, on stderr); until it is changed only session/password/logout work (`403 password_change_required`). `tolarix admin reset-password` prints a new one and ends every session. Minimum length 12. Sessions: 7 days idle, 30 days at most; a password change ends the other sessions. Login rate limit: 10 failures per 15 minutes per client IP. Client IPs and HTTPS come from `X-Forwarded-*` only for `TOLARIX_TRUSTED_PROXIES`. Session cookie: HttpOnly, SameSite=Lax, Secure when HTTPS (`TOLARIX_COOKIE_SECURE`).
+- **Desktop mode has no sign-in** (launch token instead); the UI hides sign-out and password there.
+- **API rules**: a mirror cannot use the Master's connection; the kind of a saved connection cannot change; a flow cannot be edited or deleted while it runs (`409 running`); a connection used by a flow cannot be deleted (`409 in_use`, message lists the flows). Runs started from the CLI can only be stopped from the CLI (`409 not_here`); runs started in the UI can be cancelled (`POST /runs/{id}/cancel`).
+- **Manual runs work on disabled flows**: "disabled" only stops automatic schedules.
+- **Banner**: on by default for new flows; custom text per flow (max 2000 characters, `{master}` placeholder); empty = the default text, still English (the server writes it into the mirrors).
+- **Flow wizard**: the Master of a saved flow cannot be changed in the UI (its page ids and mappings belong to it); create a new flow instead. Steps: Master, what to mirror, Mirrors, options, schedule (manual only until M6), review. A disabled flow can still be run by hand.
+- **Run detail**: the live log keeps the last 5,000 lines in the browser (the full log stays on the server); the report hides unchanged pages by default.
+- **Server validation messages** (`fields` in 400 answers) are English only; the UI translates the error codes it knows. Follow-up below.
+- **Docker**: distroless static image, uid 65532, `/data` volume, `HEALTHCHECK` = `/tolarix healthcheck`; compose mounts `./vaults` at `/vaults` for Obsidian.
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
-- Passwords argon2id; server-side sessions in SQLite; CSRF double-submit header `X-CSRF-Token`.
+- Passwords argon2id; server-side sessions in SQLite; CSRF synchronizer token per session (from `GET /auth/session`), sent as `X-CSRF-Token`.
+- Web data layer: openapi-fetch + TanStack Query; generated types in `web/src/api/schema.gen.ts`. Routes other than the dashboard are lazy-loaded.
+- E2E: Playwright starts the real binary in web mode on a temp data dir and reads the one-time password from its output (`web/e2e/global-setup.ts`).
 - Live logs: `run_events` table + in-process pub/sub; SSE replays from the DB then tails (CLI-started runs are visible in the UI).
 - Locking: `flow_locks` row with heartbeat; stale after 2 min. SQLite WAL + busy_timeout + `_txlock=immediate`.
 - Default data dir: `os.UserConfigDir()/Tolarix` (`tolarix` on Linux); `/data` in Docker via `TOLARIX_DATA_DIR`.
@@ -87,10 +100,10 @@ Taken during M2:
 - No inline scripts in `index.html`: the server CSP forbids them. The theme is applied in `main.tsx` before the first render.
 
 ## Known follow-ups
-- Web bundle > 500 kB warning: add route-level code splitting in M3 when real pages arrive.
-- Client IP for login rate limiting (M3): add a `TOLARIX_TRUSTED_PROXIES` setting; chi `middleware.RealIP` was removed because it trusts `X-Forwarded-For` blindly.
-- `serve` in web mode currently has no auth: API endpoints arrive with auth in M3. Do not expose an M1/M2 build publicly.
+- Server validation messages and the default banner text are English only: return message keys + params so the UI (and mirrors) can translate them.
+- Connector field labels in the UI come from `connectorFields.<kind>.<field>` translations, falling back to a humanised field name: add the keys with each new connector (M4/M5).
+- The web bundle's main chunk is ~375 kB (118 kB gzip); the Radix/shadcn shared chunk could be split further if it grows.
+- Playwright has no axe checks yet (M8 a11y pass).
 - **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; tackle with the ADO connector, where renames are common.
-- Run event attributes are stored as strings (`fmt.Sprint`); typed values if the UI needs them (M3).
-- Banner text should become translatable/configurable per flow (M3 flow wizard).
+- Run event attributes are stored as strings (`fmt.Sprint`); the UI shows them as `key=value`, which is enough for now.
 - `runner.Runner` has no global concurrency cap yet (the built-in scheduler in M6 adds the cap of 2).

@@ -16,3 +16,17 @@ export function useFormatters() {
       new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(value, unit),
   };
 }
+
+/** Duration between two timestamps, e.g. "1 min 5 s". */
+export function useDuration() {
+  const fmt = useFormatters();
+  return (start: string, end?: string) => {
+    if (!end) return "";
+    const s = Math.max(0, Math.round((Date.parse(end) - Date.parse(start)) / 1000));
+    const unit = (value: number, u: "hour" | "minute" | "second") =>
+      fmt.number(value, { style: "unit", unit: u, unitDisplay: "narrow" });
+    if (s < 60) return unit(s, "second");
+    if (s < 3600) return `${unit(Math.floor(s / 60), "minute")} ${unit(s % 60, "second")}`;
+    return `${unit(Math.floor(s / 3600), "hour")} ${unit(Math.floor((s % 3600) / 60), "minute")}`;
+  };
+}
