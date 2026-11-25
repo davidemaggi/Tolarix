@@ -129,7 +129,9 @@
     "deleted": "Connessione \"{{name}}\" eliminata."
   },
   "connectorKinds": {
-    "obsidian": "Una cartella di file Markdown (un vault Obsidian) su questo server."
+    "obsidian": "Una cartella di file Markdown (un vault Obsidian) su questo server.",
+    "azure-devops-code": "Una wiki pubblicata da un repository Git in Azure DevOps (Services o Server). Tolarix legge e invia commit tramite la REST API.",
+    "confluence-dc": "Uno spazio Confluence Data Center o Server, oppure una pagina con tutto quello che contiene."
   },
   "connectorFields": {
     "obsidian": {
@@ -138,6 +140,28 @@
       "location": {
         "folder": "Cartella nel vault",
         "folderHint": "Le pagine copiate finiscono in questa cartella. Lasciala vuota per usare la radice del vault."
+      }
+    },
+    "azure-devops-code": {
+      "url": "Indirizzo della wiki o del repository",
+      "urlHint": "Apri la wiki in Azure DevOps e copia l'indirizzo dal browser (…/_wiki/wikis/<nome>), oppure la cartella del repository da cui è pubblicata (…/_git/<repo>?path=/docs).",
+      "token": "Personal access token",
+      "tokenHint": "Crealo in Azure DevOps da User settings → Personal access tokens, con lo scope Code (Read & write).",
+      "location": {
+        "folder": "Cartella nella wiki",
+        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit."
+      }
+    },
+    "confluence-dc": {
+      "url": "Indirizzo dello spazio o della pagina",
+      "urlHint": "Apri lo spazio (o la pagina da cui partire) in Confluence e copia l'indirizzo dal browser.",
+      "token": "Personal access token o password",
+      "tokenHint": "Un personal access token (Profilo → Personal Access Tokens). Se indichi un nome utente, qui va la sua password.",
+      "username": "Nome utente",
+      "usernameHint": "Solo per l'accesso con password. Lascialo vuoto se usi un personal access token.",
+      "location": {
+        "parent": "Pagina padre",
+        "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la radice dello spazio."
       }
     }
   },

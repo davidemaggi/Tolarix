@@ -1,6 +1,6 @@
 # Renderers (derived attachments) — design
 
-Status: designed 2026-11-25; interface lands in M2, the draw.io renderer in M4 (with Confluence Data Center).
+Status: interface in M2; the draw.io renderer (`internal/render/drawio`) landed in M4. See "Implementation" at the end for what differs from the first design.
 
 ## Problem
 
@@ -78,3 +78,23 @@ that explains how to enable 2 or 3.
   `inc-drawio` variant), and the attachment names and media types. Capture
   anonymised fixtures from a real instance before writing the decoder.
 - Whether a stale preview can exist (diagram saved without regenerating the PNG).
+
+## Implementation (M4)
+
+- `drawio.New(dataDir)` is the only renderer; `serve` and the CLI runtime pass it to every run.
+- **Match**: attachments with role `diagram-source` (the Confluence `drawio` macro) or a
+  `.drawio` name or media type. `.drawio.png` / `.drawio.svg` already display and are left alone.
+- **Order**: (1) a sibling `<name>.png` or `<name>.drawio.png` that really is a PNG;
+  (2) the cache `<dataDir>/cache/render/<xx>/<sha256(drawio|version|source hash)>.png`;
+  (3) `TOLARIX_DRAWIO_EXPORT_URL`: a form POST (`format=png`, `xml=…`, `border=10`) as
+  accepted by `jgraph/export-server` (see the commented service in `deploy/docker-compose.yml`);
+  (4) draw.io Desktop: `TOLARIX_DRAWIO_CLI`, else `drawio` / `draw.io` on PATH, else the macOS app,
+  run as `--export --format png --border 10 --output out.png in.drawio` (plus `--no-sandbox` on Linux).
+  Every result is checked for the PNG signature. Rendered PNGs (3, 4) are cached; previews are not.
+- Each step has a 60 s timeout. When nothing works, the warning names what was tried, or says
+  how to enable a renderer when none is configured.
+- Multi-page diagrams: only the first page is rendered.
+- The PNG is named `<diagram>.png`. A preview with identical bytes has the same content hash,
+  so the mirror stores one file.
+- Confluence as a mirror writes an image wrapped in a link to the `.drawio` attachment. Writing
+  the `drawio` macro (when the target has the app) is a follow-up.

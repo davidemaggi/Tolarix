@@ -8,6 +8,8 @@
 //   - Attachment links:     [text](tolarix://att/<sha256>) and ![alt](tolarix://att/<sha256> "width=300")
 //   - Callouts:             > [!note] Optional title   (kind lowercase; fold markers + / - kept)
 //   - Mermaid:              ```mermaid fenced code blocks
+//   - Table of contents:    a line holding only TOCMarker
+//   - Unknown macros:       ```confluence-macro fenced blocks holding the raw storage XML
 //
 // Fragments carry the raw heading text (percent-escaped), not a slug: each
 // target slugs headings its own way.
@@ -20,6 +22,10 @@ import (
 	"io"
 	"sort"
 )
+
+// TOCMarker is the canonical "table of contents here" line. It is an HTML
+// comment so targets without a TOC feature (Obsidian) simply hide it.
+const TOCMarker = "<!-- tolarix:toc -->"
 
 // Page is one node of the tree.
 type Page struct {

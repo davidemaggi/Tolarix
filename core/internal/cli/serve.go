@@ -128,7 +128,7 @@ func runServe(ctx context.Context, a *app, o *serveOpts, portSet bool) error {
 		}
 	}
 	hub := runner.NewHub()
-	rn := &runner.Runner{Store: st, Cipher: cipher, Log: a.log, Notify: hub.Notify}
+	rn := &runner.Runner{Store: st, Cipher: cipher, Log: a.log, Notify: hub.Notify, Renderers: renderers(dir)}
 	bg := runner.NewBackground(rn)
 
 	var lc net.ListenConfig

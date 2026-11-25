@@ -12,8 +12,8 @@ The original product brief is in [brief.md](brief.md).
 |---|---|---|---|
 | 1 | Scaffold: Go core, SQLite + migrations, CLI skeleton, React + shadcn, i18n en/it, theme, CI | done | `develop` |
 | 2 | Canonical model, Obsidian connector, sync engine + mapping, dry-run, `flow run` CLI, renderer pipeline (interface) | done | `develop` |
-| 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | **done, awaiting review** | `develop` |
-| 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | | |
+| 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | done | `develop` |
+| 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | **done, awaiting review** | `develop` |
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | | |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | | |
 | 7 | Tauri desktop app with Go sidecar, installers | | |
@@ -23,10 +23,10 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 ### Where we left off (2026-11-25)
 
-- M2 was approved ("continua con l'implementazione") and M3 is committed on `develop` (not pushed). Start the next session by asking for the M3 review and approval to begin M4.
-- **Open question for the product owner:** CI (`.github/workflows/ci.yml`) only runs on `main` and on pull requests, so the README badge has no status for `develop`. Should `develop` be added to the push triggers?
-- Defaults chosen in M2 and M3 that are awaiting review are listed under "Taken during M2" and "Taken during M3" below.
-- **Next: M4.** Confluence Data Center/Server and Azure DevOps Code wiki connectors, storage-format converter, draw.io renderer.
+- M3 was approved ("vai avanti", 2026-11-25). M4 is committed on `develop` (not pushed). Start the next session by asking for the M4 review and approval to begin M5.
+- Defaults chosen in M2–M4 that are awaiting review are listed under "Taken during M2/M3/M4" below. How each wiki is mapped: [connectors.md](connectors.md).
+- M4 was tested against in-memory fakes of the Confluence and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis is the first thing to do with the product owner.
+- **Next: M5.** Confluence Cloud and Azure DevOps Project wiki.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -50,6 +50,7 @@ Each milestone ends with tests green and a stop for review before the next one s
 - Confluence duplicate titles: suffix the parent title (`Overview (Backend)`), log a warning, keep it stable through the mapping table.
 - Pre-existing pages at a mirror target that Tolarix did not create are never touched. A name collision fails that page with a fix-it message. Optional per-target "adopt existing pages" flag.
 - Move detection for path-identity sources (Obsidian, ADO): a delete + create pair with identical body hash is a move; otherwise delete + create. Tolarix never writes ids into the Master.
+- CI runs on pushes to `main` and on pull requests only, not on `develop` (2026-11-25).
 - Connector priority (2026-11-25): Confluence Data Center/Server and Azure DevOps Code wiki first (M4), then Confluence Cloud and ADO Project wiki (M5).
 - draw.io (2026-11-25): in mirrors keep the `.drawio` as an attachment **and** show a PNG. Build a generic "render" step; draw.io is the first renderer. See [renderers.md](renderers.md).
 
@@ -86,6 +87,17 @@ Taken during M3:
 - **Server validation messages** (`fields` in 400 answers) are English only; the UI translates the error codes it knows. Follow-up below.
 - **Docker**: distroless static image, uid 65532, `/data` volume, `HEALTHCHECK` = `/tolarix healthcheck`; compose mounts `./vaults` at `/vaults` for Obsidian.
 
+Taken during M4:
+- **Buffered targets**: a session that implements `connectors.Buffering` (ADO) keeps every write in memory; the engine saves its mappings only after `Finish` succeeds. A failed push reports every operation as "not saved" and the next run starts from the same state.
+- **ADO: one commit per run**, pushed with `oldObjectId` = the head read at the start. A concurrent push fails the run ("run the flow again"). Pushes over 64 MiB are split into parts.
+- **ADO project wikis** (`wikiType: projectWiki`) are rejected with a clear message until M5; code wikis and repository folders work.
+- **ADO as a mirror**: moves are delete + add; archive is a git rename to `<target>/Archived/…` (history follows); `.order` is regenerated in every folder under the target (unmanaged pages after, alphabetically); attachments go to `<target folder>/.attachments/`; front matter (page meta) is kept; callouts become `> **Tip:** …` (the wiki has none; one way).
+- **ADO anchors** are written as the wiki makes them (lower case, spaces → `-`, other characters percent-encoded); the reader also accepts GitHub-style anchors.
+- **Confluence as a mirror**: titles unique per space (parent title in brackets, then a number, `title-renamed` warning); a title held by a page Tolarix does not own fails that page as a conflict unless "adopt existing pages" is on. Archive = move under `Archived – <parent title>` (`Archived – Tolarix` at the space top) and rename `<title> (archived)`. Edits in Confluence are detected through the page version stored in the mapping (migration `00003`). Attachments go to the first page that uses them. Mermaid becomes a `code` macro titled `mermaid`; unknown macros round-trip as raw XML.
+- **Confluence auth**: a PAT (Bearer) by default; with `username`, Basic with that user's password (older Server versions).
+- **draw.io → PNG order**: preview next to the diagram, render cache (`<dataDir>/cache/render`), export server (`TOLARIX_DRAWIO_EXPORT_URL`, `jgraph/export-server` as an optional compose service), draw.io Desktop. Without any of them the mirror keeps the `.drawio` link and the run warns how to enable one. First page only.
+- **HTTP retries** (`internal/httpc`): 429 and 503 always; 500/502/504 and network errors only for idempotent methods; honours `Retry-After` and rate-limit headers.
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
@@ -101,9 +113,16 @@ Taken during M3:
 
 ## Known follow-ups
 - Server validation messages and the default banner text are English only: return message keys + params so the UI (and mirrors) can translate them.
-- Connector field labels in the UI come from `connectorFields.<kind>.<field>` translations, falling back to a humanised field name: add the keys with each new connector (M4/M5).
+- Connector field labels in the UI come from `connectorFields.<kind>.<field>` translations, falling back to a humanised field name: add the keys with each new connector (M5: Confluence Cloud, ADO Project wiki).
+- **M4 follow-ups**:
+  - Confluence: page labels and other metadata are not mapped yet (meta only through ADO/Obsidian front matter).
+  - Confluence as a mirror does not set sibling order (Confluence orders children itself); Master order is lost there.
+  - Confluence mirrors show a draw.io diagram as image + link to the `.drawio`; writing the `drawio` macro when the target has the app is not done.
+  - ADO split pushes: if a later part fails, the earlier parts stay pushed but their mappings are not saved; the next run sees them as edits made in the wiki and rewrites them (correct, but noisy warnings).
+  - On a first run, an attachment used by the renderer and the mirror is downloaded twice from the Master.
+  - Azure DevOps Server (on-premises) URLs are parsed but untested.
 - The web bundle's main chunk is ~375 kB (118 kB gzip); the Radix/shadcn shared chunk could be split further if it grows.
 - Playwright has no axe checks yet (M8 a11y pass).
-- **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; tackle with the ADO connector, where renames are common.
+- **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; still open after M4.
 - Run event attributes are stored as strings (`fmt.Sprint`); the UI shows them as `key=value`, which is enough for now.
 - `runner.Runner` has no global concurrency cap yet (the built-in scheduler in M6 adds the cap of 2).

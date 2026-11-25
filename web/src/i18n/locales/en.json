@@ -129,7 +129,9 @@
     "deleted": "Connection \"{{name}}\" deleted."
   },
   "connectorKinds": {
-    "obsidian": "A folder of Markdown files (an Obsidian vault) on this server."
+    "obsidian": "A folder of Markdown files (an Obsidian vault) on this server.",
+    "azure-devops-code": "A wiki published from a Git repository in Azure DevOps (Services or Server). Tolarix reads and pushes commits through the REST API.",
+    "confluence-dc": "A Confluence Data Center or Server space, or a page and everything below it."
   },
   "connectorFields": {
     "obsidian": {
@@ -138,6 +140,28 @@
       "location": {
         "folder": "Folder inside the vault",
         "folderHint": "Mirrored pages go into this folder. Leave it empty to use the top of the vault."
+      }
+    },
+    "azure-devops-code": {
+      "url": "Wiki or repository address",
+      "urlHint": "Open the wiki in Azure DevOps and copy the address from the browser (…/_wiki/wikis/<name>), or the repository folder it is published from (…/_git/<repo>?path=/docs).",
+      "token": "Personal access token",
+      "tokenHint": "Create it in Azure DevOps under User settings → Personal access tokens, with the Code (Read & write) scope.",
+      "location": {
+        "folder": "Folder inside the wiki",
+        "folderHint": "Mirrored pages go into this folder, for example Mirrors/Team. Leave it empty to use the top of the wiki. Each run is pushed as one commit."
+      }
+    },
+    "confluence-dc": {
+      "url": "Space or page address",
+      "urlHint": "Open the space (or the page to start from) in Confluence and copy the address from the browser.",
+      "token": "Personal access token or password",
+      "tokenHint": "A personal access token (Profile → Personal Access Tokens). With a username, this is that user's password instead.",
+      "username": "Username",
+      "usernameHint": "Only for password sign-in. Leave it empty when you use a personal access token.",
+      "location": {
+        "parent": "Parent page",
+        "parentHint": "Title (or numeric id) of the page that mirrored pages go under. Leave it empty to use the connection's page, or the top of the space."
       }
     }
   },

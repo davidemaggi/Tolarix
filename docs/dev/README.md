@@ -57,6 +57,8 @@ the container.
 | `TOLARIX_COOKIE_SECURE` | `auto` | `auto` (Secure when the request is HTTPS), `true`, `false` |
 | `TOLARIX_HEALTHCHECK_URL` | `http://127.0.0.1:$TOLARIX_PORT/healthz` | URL used by `tolarix healthcheck` |
 | `TOLARIX_LOG_LEVEL` / `TOLARIX_LOG_FORMAT` | `info` / `text` | logging (stderr) |
+| `TOLARIX_DRAWIO_EXPORT_URL` | none | draw.io export server used to render diagrams to PNG (see [renderers.md](renderers.md)) |
+| `TOLARIX_DRAWIO_CLI` | `drawio` on PATH, or the macOS app | draw.io Desktop executable used to render diagrams |
 
 ## Day-to-day
 
@@ -110,13 +112,20 @@ core/                     Go module github.com/davidemaggi/tolarix/core
   internal/cli/           cobra commands; exit codes are in root.go and are a public contract
   internal/connectors/    the Source/Target/Session contract + registry
     obsidian/             Obsidian vault connector (decode, encode, write session) + golden tests
+    confluence/           Confluence Data Center / Server (REST v1) + in-memory API fake
+    azuredevops/          Azure DevOps Code wiki over the Git REST API + in-memory API fake
     all/                  blank-imports every connector (import this to register them)
   internal/convert/mdscan/ Markdown scanning that never touches code blocks/spans/comments
+  internal/convert/storage/ Confluence storage format <-> Markdown (shared by DC and Cloud)
+  internal/convert/frontmatter/ YAML front matter <-> page meta
   internal/datadir/       data dir resolution (--data-dir > TOLARIX_DATA_DIR > OS default)
   internal/engine/        plan + apply: scope, move detection, delete policies, dry-run
+    enginetest/           MemStore, an in-memory mapping store for connector end-to-end tests
+  internal/httpc/         shared HTTP client: retries with backoff, rate-limit headers, API errors
   internal/logging/       slog setup; logs go to stderr only
   internal/model/         canonical page tree, hashes, tolarix:// link helpers
   internal/render/        renderer pipeline (derived attachments, e.g. draw.io -> PNG)
+    drawio/               draw.io -> PNG: preview, cache, export server, draw.io Desktop
   internal/runner/        runs a stored flow: lock + heartbeat, run row, live events, report
   internal/secrets/       AES-GCM cipher, key loading, secrets.String (redacts itself)
   internal/store/         SQLite open, goose migrations, repositories (connections, flows, mappings, runs, locks)
@@ -144,6 +153,7 @@ runner.RunFlow ── lock (flow_locks + heartbeat) ── runs row ── run_e
           Session.Layout ─▶ Session.Encode (every page) ─▶ Session.Inventory + mappings
           plan: orphans (delete/archive/keep) → pages in tree order (create/update/move/unchanged/conflict)
           apply (unless dry-run): uploads → page ops (mapping saved after each) → attachment deletes → Finish
+          (sessions that buffer writes, like Azure DevOps, get their mappings saved only after Finish succeeds)
 ```
 
 Canonical Markdown conventions (links `tolarix://page/<id>`, `tolarix://att/<sha256>`,
@@ -158,7 +168,10 @@ callouts, Mermaid) are documented at the top of `internal/model/model.go`.
 4. Golden tests per direction, like `obsidian/obsidian_test.go`: `testdata/decode/<case>/` (native input →
    `expected.yaml` + `warnings.txt`) and `testdata/encode/<case>/` (`input.yaml` → expected native output).
    Every degradation must emit a `connectors.Warning`, so it shows up in `warnings.txt`.
-5. HTTP connectors: tests against `httptest` servers with recorded, anonymised fixtures. Never commit real credentials.
+5. HTTP connectors: an in-memory fake of the API on `httptest` (see `confluence/fake_test.go`,
+   `azuredevops/fake_test.go`) plus an end-to-end test through the real engine. Never commit real credentials.
+6. Add `connectorKinds.<kind>` and `connectorFields.<kind>.*` to `web/src/i18n/locales/{en,it}.json`.
+7. Document the mapping in [connectors.md](connectors.md).
 
 The engine needs no change. Its tests use in-memory fakes (`internal/engine/fakes_test.go`).
 

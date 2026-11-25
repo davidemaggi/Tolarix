@@ -10,9 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"go.yaml.in/yaml/v3"
-
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
+	"github.com/davidemaggi/tolarix/core/internal/convert/frontmatter"
 	"github.com/davidemaggi/tolarix/core/internal/convert/mdscan"
 	"github.com/davidemaggi/tolarix/core/internal/model"
 )
@@ -167,7 +166,7 @@ func (d *decoder) warn(p *model.Page, code, format string, a ...any) {
 func (d *decoder) decodeNote(p *model.Page, src string) {
 	body := src
 	if fm, rest, ok := mdscan.SplitFrontMatter(src); ok {
-		meta, err := parseFrontMatter(fm)
+		meta, err := frontmatter.Parse(fm)
 		if err != nil {
 			d.warn(p, "frontmatter-invalid", "the front matter (properties) is not valid YAML and was kept as text: %v", err)
 		} else {
@@ -326,46 +325,4 @@ func (d *decoder) attachment(p *model.Page, rel string) (string, error) {
 // escapeLinkText escapes brackets so generated link text cannot break the link.
 func escapeLinkText(s string) string {
 	return strings.NewReplacer(`[`, `\[`, `]`, `\]`).Replace(s)
-}
-
-// parseFrontMatter decodes YAML front matter keeping key order.
-func parseFrontMatter(src string) ([]model.MetaItem, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal([]byte(src), &doc); err != nil {
-		return nil, err
-	}
-	if len(doc.Content) == 0 {
-		return nil, nil
-	}
-	m := doc.Content[0]
-	if m.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected key: value pairs")
-	}
-	items := make([]model.MetaItem, 0, len(m.Content)/2)
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		var v any
-		if err := m.Content[i+1].Decode(&v); err != nil {
-			return nil, err
-		}
-		items = append(items, model.MetaItem{Key: m.Content[i].Value, Value: normalizeYAML(v)})
-	}
-	return items, nil
-}
-
-// normalizeYAML converts map[string]any trees so they JSON-encode cleanly.
-func normalizeYAML(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		for k, x := range t {
-			t[k] = normalizeYAML(x)
-		}
-		return t
-	case []any:
-		for i, x := range t {
-			t[i] = normalizeYAML(x)
-		}
-		return t
-	default:
-		return v
-	}
 }

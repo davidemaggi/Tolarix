@@ -398,8 +398,12 @@ func TestConnections(t *testing.T) {
 
 	var kinds []map[string]any
 	c.do("GET", "/connector-kinds", nil).json(t, &kinds)
-	if len(kinds) == 0 || kinds[0]["kind"] != "obsidian" {
-		t.Fatalf("kinds: %v", kinds)
+	var names []string
+	for _, k := range kinds {
+		names = append(names, k["kind"].(string))
+	}
+	if strings.Join(names, ",") != "azure-devops-code,confluence-dc,obsidian" {
+		t.Fatalf("kinds: %v", names)
 	}
 
 	r := c.do("POST", "/connections", map[string]any{"name": " ", "kind": "obsidian", "config": map[string]any{}})

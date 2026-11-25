@@ -6,9 +6,8 @@ import (
 	"path"
 	"strings"
 
-	"go.yaml.in/yaml/v3"
-
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
+	"github.com/davidemaggi/tolarix/core/internal/convert/frontmatter"
 	"github.com/davidemaggi/tolarix/core/internal/convert/mdscan"
 	"github.com/davidemaggi/tolarix/core/internal/model"
 )
@@ -109,15 +108,11 @@ func encode(p *model.Page, l *connectors.Layout, w connectors.Warner) ([]byte, e
 		return nil, nil
 	}
 	var b bytes.Buffer
-	if len(p.Meta) > 0 {
-		fm, err := encodeFrontMatter(p.Meta)
-		if err != nil {
-			return nil, fmt.Errorf("page %q: front matter: %w", p.ID, err)
-		}
-		b.WriteString("---\n")
-		b.Write(fm)
-		b.WriteString("---\n")
+	fm, err := frontmatter.Block(p.Meta)
+	if err != nil {
+		return nil, fmt.Errorf("page %q: front matter: %w", p.ID, err)
 	}
+	b.Write(fm)
 	body := mdscan.ReplaceFuncAt(p.Body, mdscan.MarkdownLink, func(pos int, m []string) (string, bool) {
 		return encodeLink(p, l, w, m[1] == "!", m[2], m[3], m[4], mdscan.InTableRow(p.Body, pos))
 	})
@@ -185,27 +180,6 @@ func encodeLink(p *model.Page, l *connectors.Layout, w connectors.Warner, image 
 
 func unescapeLinkText(s string) string {
 	return strings.NewReplacer(`\[`, `[`, `\]`, `]`).Replace(s)
-}
-
-func encodeFrontMatter(items []model.MetaItem) ([]byte, error) {
-	m := &yaml.Node{Kind: yaml.MappingNode}
-	for _, it := range items {
-		var v yaml.Node
-		if err := v.Encode(it.Value); err != nil {
-			return nil, err
-		}
-		m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: it.Key}, &v)
-	}
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(m); err != nil {
-		return nil, err
-	}
-	if err := enc.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 // Characters Obsidian (or common file systems) do not allow in note names.

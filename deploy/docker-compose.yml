@@ -19,12 +19,20 @@ services:
       # TOLARIX_TRUSTED_PROXIES: 172.16.0.0/12
       # Cookies are Secure when the request arrives over HTTPS; force it with "true".
       # TOLARIX_COOKIE_SECURE: "true"
+      # draw.io diagrams -> PNG in mirrors: enable the drawio-export service below.
+      # TOLARIX_DRAWIO_EXPORT_URL: http://drawio-export:8000/
     volumes:
       # Database and encryption key. Back this up together.
       - tolarix-data:/data
       # Obsidian vaults. The container runs as uid 65532: make the folder
       # writable for it if Tolarix mirrors into it.
       - ./vaults:/vaults
+
+  # Optional: renders draw.io diagrams that have no PNG preview. Only Tolarix
+  # talks to it; do not publish its port.
+  # drawio-export:
+  #   image: jgraph/export-server:latest
+  #   restart: unless-stopped
 
 volumes:
   tolarix-data:

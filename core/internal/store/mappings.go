@@ -9,7 +9,7 @@ import (
 var _ engine.MappingStore = (*Store)(nil)
 
 func (s *Store) LoadMappings(ctx context.Context, targetID string) ([]engine.Mapping, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT source_page_id, mirror_page_id, mirror_path, source_hash, body_hash, mirror_hash, state
+	rows, err := s.DB.QueryContext(ctx, `SELECT source_page_id, mirror_page_id, mirror_path, source_hash, body_hash, mirror_hash, mirror_version, state
 		FROM page_mappings WHERE target_id = ? ORDER BY source_page_id`, targetID)
 	if err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func (s *Store) LoadMappings(ctx context.Context, targetID string) ([]engine.Map
 	var out []engine.Mapping
 	for rows.Next() {
 		var m engine.Mapping
-		if err := rows.Scan(&m.SourceID, &m.MirrorID, &m.MirrorKey, &m.SourceHash, &m.BodyHash, &m.MirrorHash, &m.State); err != nil {
+		if err := rows.Scan(&m.SourceID, &m.MirrorID, &m.MirrorKey, &m.SourceHash, &m.BodyHash, &m.MirrorHash, &m.MirrorVersion, &m.State); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -31,13 +31,13 @@ func (s *Store) UpsertMapping(ctx context.Context, targetID string, m engine.Map
 		m.State = engine.StateActive
 	}
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO page_mappings
-		(target_id, source_page_id, mirror_page_id, mirror_path, source_hash, body_hash, mirror_hash, state, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(target_id, source_page_id, mirror_page_id, mirror_path, source_hash, body_hash, mirror_hash, mirror_version, state, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (target_id, source_page_id) DO UPDATE SET
 			mirror_page_id = excluded.mirror_page_id, mirror_path = excluded.mirror_path,
 			source_hash = excluded.source_hash, body_hash = excluded.body_hash,
-			mirror_hash = excluded.mirror_hash, state = excluded.state, updated_at = excluded.updated_at`,
-		targetID, m.SourceID, m.MirrorID, m.MirrorKey, m.SourceHash, m.BodyHash, m.MirrorHash, m.State, now())
+			mirror_hash = excluded.mirror_hash, mirror_version = excluded.mirror_version, state = excluded.state, updated_at = excluded.updated_at`,
+		targetID, m.SourceID, m.MirrorID, m.MirrorKey, m.SourceHash, m.BodyHash, m.MirrorHash, m.MirrorVersion, m.State, now())
 	return err
 }
 

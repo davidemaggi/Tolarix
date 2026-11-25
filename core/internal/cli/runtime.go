@@ -9,6 +9,8 @@ import (
 	"text/tabwriter"
 
 	_ "github.com/davidemaggi/tolarix/core/internal/connectors/all" // register connectors
+	"github.com/davidemaggi/tolarix/core/internal/render"
+	"github.com/davidemaggi/tolarix/core/internal/render/drawio"
 	"github.com/davidemaggi/tolarix/core/internal/runner"
 	"github.com/davidemaggi/tolarix/core/internal/secrets"
 	"github.com/davidemaggi/tolarix/core/internal/store"
@@ -36,8 +38,13 @@ func (a *app) openRuntime(ctx context.Context) (*runtime, func(), error) {
 		_ = st.Close()
 		return nil, nil, &ExitError{Code: ExitConfigError, Err: err}
 	}
-	rt := &runtime{store: st, cipher: ci, runner: &runner.Runner{Store: st, Cipher: ci, Log: a.log}}
+	rt := &runtime{store: st, cipher: ci, runner: &runner.Runner{Store: st, Cipher: ci, Log: a.log, Renderers: renderers(dir)}}
 	return rt, func() { _ = st.Close() }, nil
+}
+
+// renderers are the attachment renderers every run uses.
+func renderers(dataDir string) []render.Renderer {
+	return []render.Renderer{drawio.New(dataDir)}
 }
 
 func notFoundErr(what, name string, err error) error {

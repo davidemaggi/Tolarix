@@ -1,0 +1,36 @@
+<h1>Intro</h1>
+<p>Plain <strong>bold</strong>, <em>italic</em>, <span style="text-decoration: line-through;">gone</span>, <code>a|b</code> and *escaped* &amp; html <br/> done. Soft break here<br/>hard break.</p>
+<ac:structured-macro ac:name="toc"/>
+<h2>Next Steps</h2>
+<ul>
+<li>one</li>
+<li>two
+<ul>
+<li>nested <a href="https://example.com">link</a></li></ul></li>
+<li>[x] not a task list item in mixed list</li></ul><ol start="3">
+<li>three</li>
+<li>four</li></ol>
+<ac:task-list>
+<ac:task><ac:task-id>1</ac:task-id><ac:task-status>complete</ac:task-status><ac:task-body>done</ac:task-body></ac:task>
+<ac:task><ac:task-id>2</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body>open</ac:task-body></ac:task></ac:task-list>
+<blockquote>
+<p>plain quote</p></blockquote>
+<ac:structured-macro ac:name="note"><ac:parameter ac:name="title">Careful</ac:parameter>
+<ac:rich-text-body>
+<p>Body line</p>
+<ul>
+<li>list in callout</li></ul></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">Folded</ac:parameter>
+<ac:rich-text-body>
+<p>hidden</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">js</ac:parameter><ac:plain-text-body><![CDATA[const a = "<b>]]]]><![CDATA[>";]]></ac:plain-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="code"><ac:parameter ac:name="title">mermaid</ac:parameter><ac:plain-text-body><![CDATA[graph TD; A-->B]]></ac:plain-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="gadget"><ac:parameter ac:name="url">x</ac:parameter></ac:structured-macro>
+<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">xml</ac:parameter><ac:plain-text-body><![CDATA[<div>raw block</div>]]></ac:plain-text-body></ac:structured-macro>
+<hr/>
+<table><tbody>
+<tr><th>Name</th><th>Value</th></tr>
+<tr><td>a</td><td>b<br/>c</td></tr></tbody></table>
+<table><tbody>
+<tr><td>no</td><td>header</td></tr></tbody></table>
+<!-- warnings: html-block html-dropped html-dropped -->

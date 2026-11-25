@@ -165,9 +165,22 @@ func (e *Engine) runTarget(ctx context.Context, req Request, tree *model.Tree, t
 	}
 
 	if !req.DryRun {
-		ops, attOps = e.apply(ctx, req, t, tree, blobs, want, ops, attOps)
-		if err := s.Finish(ctx, ctx.Err() == nil); err != nil {
-			tr.Error = fmt.Sprintf("finish writing: %v", err)
+		store := e.Mappings
+		var deferred *deferredStore
+		if b, ok := s.(connectors.Buffering); ok && b.BuffersWrites() {
+			deferred = &deferredStore{MappingStore: e.Mappings}
+			store = deferred
+		}
+		ops, attOps = e.apply(ctx, req, t, store, tree, blobs, want, ops, attOps)
+		ferr := s.Finish(ctx, ctx.Err() == nil)
+		if ferr == nil && deferred != nil {
+			ferr = deferred.flush(ctx)
+		}
+		if ferr != nil {
+			tr.Error = fmt.Sprintf("finish writing: %v", ferr)
+			if deferred != nil {
+				markUnsaved(ops, attOps, ferr)
+			}
 		}
 	}
 	tr.Ops, tr.Attachments = ops, attOps
@@ -303,7 +316,7 @@ func plan(tree *model.Tree, want map[string]*desired, order []string, maps []Map
 			} else if op.Reason == "" {
 				op.Reason = "moved or renamed in the Master"
 			}
-		case !d.page.Placeholder && item.Hash != m.MirrorHash:
+		case !d.page.Placeholder && editedOnMirror(item, m):
 			op.Kind, op.Reason = OpUpdate, "changed on the mirror by someone; overwritten"
 			w.Warn(connectors.Warning{PageID: id, Code: "mirror-edited",
 				Message: fmt.Sprintf("the mirror page %s was edited outside Tolarix; the changes are overwritten", m.MirrorKey)})
@@ -327,6 +340,19 @@ func plan(tree *model.Tree, want map[string]*desired, order []string, maps []Map
 		ops = append(ops, op)
 	}
 	return ops
+}
+
+// editedOnMirror reports whether a mirror page changed since Tolarix wrote it.
+func editedOnMirror(item connectors.MirrorItem, m *Mapping) bool {
+	if item.Version != "" || m.MirrorVersion != "" {
+		return item.Version != m.MirrorVersion
+	}
+	return item.Hash != m.MirrorHash
+}
+
+// mirrorItem is the mirror page a mapping points to.
+func (m *Mapping) mirrorItem() connectors.MirrorItem {
+	return connectors.MirrorItem{ID: m.MirrorID, Key: m.MirrorKey, Hash: m.MirrorHash, Version: m.MirrorVersion}
 }
 
 func planAttachments(ctx context.Context, s connectors.Session, tree *model.Tree, l *connectors.Layout,
@@ -379,10 +405,9 @@ func planAttachments(ctx context.Context, s connectors.Session, tree *model.Tree
 }
 
 // apply executes the plan, updating the mapping after each success.
-func (e *Engine) apply(ctx context.Context, req Request, t Target, tree *model.Tree, blobs *render.Pipeline,
+func (e *Engine) apply(ctx context.Context, req Request, t Target, store MappingStore, tree *model.Tree, blobs *render.Pipeline,
 	want map[string]*desired, ops []Op, attOps []AttachmentOp) ([]Op, []AttachmentOp) {
 	s := t.Session
-	store := e.Mappings
 
 	// Uploads before pages so links resolve as soon as a page appears.
 	for i := range attOps {
@@ -410,7 +435,7 @@ func (e *Engine) apply(ctx context.Context, req Request, t Target, tree *model.T
 			if op.Kind == OpUnchanged && op.page != "" && op.mapping != nil {
 				d := want[op.page]
 				if op.mapping.SourceID != op.page || op.mapping.BodyHash != d.page.BodyHash() || op.mapping.State != StateActive {
-					if err := e.persist(ctx, t, op, d, connectors.MirrorItem{ID: op.mapping.MirrorID, Key: op.mapping.MirrorKey, Hash: op.mapping.MirrorHash}); err != nil {
+					if err := persist(ctx, store, t, op, d, op.mapping.mirrorItem()); err != nil {
 						op.Error = err.Error()
 					}
 				}
@@ -429,26 +454,27 @@ func (e *Engine) apply(ctx context.Context, req Request, t Target, tree *model.T
 			if op.adopt != nil {
 				w.Existing = op.adopt
 			} else if op.mapping != nil && op.Kind != OpCreate {
-				w.Existing = &connectors.MirrorItem{ID: op.mapping.MirrorID, Key: op.mapping.MirrorKey, Hash: op.mapping.MirrorHash}
+				existing := op.mapping.mirrorItem()
+				w.Existing = &existing
 			}
 			var item connectors.MirrorItem
 			item, err = s.WritePage(ctx, w)
 			if err == nil {
-				err = e.persist(ctx, t, op, d, item)
+				err = persist(ctx, store, t, op, d, item)
 			}
 		case OpDelete:
 			if op.From != "" && op.Reason != "already gone from the mirror" {
-				err = s.DeletePage(ctx, connectors.MirrorItem{ID: op.mapping.MirrorID, Key: op.mapping.MirrorKey})
+				err = s.DeletePage(ctx, op.mapping.mirrorItem())
 			}
 			if err == nil {
 				err = store.DeleteMapping(ctx, t.ID, op.mapping.SourceID)
 			}
 		case OpArchive:
 			var item connectors.MirrorItem
-			item, err = s.ArchivePage(ctx, connectors.MirrorItem{ID: op.mapping.MirrorID, Key: op.mapping.MirrorKey, Hash: op.mapping.MirrorHash})
+			item, err = s.ArchivePage(ctx, op.mapping.mirrorItem())
 			if err == nil {
 				m := *op.mapping
-				m.MirrorID, m.MirrorKey, m.MirrorHash, m.State = item.ID, item.Key, item.Hash, StateArchived
+				m.MirrorID, m.MirrorKey, m.MirrorHash, m.MirrorVersion, m.State = item.ID, item.Key, item.Hash, item.Version, StateArchived
 				op.To = item.Key
 				err = store.UpsertMapping(ctx, t.ID, m)
 			}
@@ -481,16 +507,17 @@ func (e *Engine) apply(ctx context.Context, req Request, t Target, tree *model.T
 	return ops, attOps
 }
 
-func (e *Engine) persist(ctx context.Context, t Target, op *Op, d *desired, item connectors.MirrorItem) error {
+func persist(ctx context.Context, store MappingStore, t Target, op *Op, d *desired, item connectors.MirrorItem) error {
 	m := Mapping{
 		SourceID: d.page.ID, MirrorID: item.ID, MirrorKey: item.Key,
-		SourceHash: d.page.ContentHash(), BodyHash: d.page.BodyHash(), MirrorHash: item.Hash, State: StateActive,
+		SourceHash: d.page.ContentHash(), BodyHash: d.page.BodyHash(), MirrorHash: item.Hash,
+		MirrorVersion: item.Version, State: StateActive,
 	}
-	if err := e.Mappings.UpsertMapping(ctx, t.ID, m); err != nil {
+	if err := store.UpsertMapping(ctx, t.ID, m); err != nil {
 		return err
 	}
 	if op.mapping != nil && op.mapping.SourceID != d.page.ID {
-		return e.Mappings.DeleteMapping(ctx, t.ID, op.mapping.SourceID)
+		return store.DeleteMapping(ctx, t.ID, op.mapping.SourceID)
 	}
 	return nil
 }

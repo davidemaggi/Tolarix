@@ -30,6 +30,7 @@ require (
 	github.com/sethvargo/go-retry v0.5.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/theory/jsonpath v0.12.3 // indirect
+	github.com/yuin/goldmark v1.8.7 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.43.0 // indirect

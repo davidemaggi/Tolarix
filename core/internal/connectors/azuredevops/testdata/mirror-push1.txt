@@ -1,0 +1,7 @@
+add /wiki/Mirror/.attachments/shot.png
+add /wiki/Mirror/.order
+add /wiki/Mirror/Guide.md
+add /wiki/Mirror/Guide/.order
+add /wiki/Mirror/Guide/Getting-Started.md
+add /wiki/Mirror/Other/.order
+add /wiki/Mirror/Other/Notes.md

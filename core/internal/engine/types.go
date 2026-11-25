@@ -67,7 +67,10 @@ type Mapping struct {
 	SourceHash string
 	BodyHash   string
 	MirrorHash string
-	State      string // active | archived | kept
+	// MirrorVersion is the target's version token after Tolarix's last write
+	// (see connectors.MirrorItem.Version); "" for targets without one.
+	MirrorVersion string
+	State         string // active | archived | kept
 }
 
 const (

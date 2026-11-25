@@ -1,0 +1,38 @@
+- Home (id=Home order=0 placeholder=false)
+    meta owner=docs
+    | <!-- tolarix:toc -->
+    | 
+    | # Welcome
+    | 
+    | See [setup](tolarix://page/Guide%2FGetting-Started#Install%20&%20Run) and [the guide](tolarix://page/Guide).
+- Guide (id=Guide order=1 placeholder=false)
+    | ## Guide
+    | 
+    | ```mermaid
+    | graph TD
+    |   A-->B
+    | ```
+    | 
+    | ![diagram](tolarix://att/403feea7e417f7ff53b8e7dff681fe2bab67f7b4b18618b0d9deb43c44b7385e "width=300")
+    | 
+    | [up](../outside.md) [nope](/Missing-Page)
+    @ diagram-1.png 403feea7 type=image/png
+  - Getting Started (id=Guide/Getting-Started order=0 placeholder=false)
+      | ## Install & Run
+      | 
+      | Back to [home](tolarix://page/Home) or [faq](tolarix://page/Guide%2FFAQ#Top).
+      | 
+      | [local](tolarix://page/Guide%2FGetting-Started#Install%20&%20Run)
+  - FAQ (id=Guide/FAQ order=1 placeholder=false)
+      | ## Top
+      | 
+      | Q&A %2D here.
+- Ops (id=Ops order=2 placeholder=true)
+    | 
+  - Runbooks (id=Ops/Runbooks order=0 placeholder=true)
+      | 
+    - Restart (id=Ops/Runbooks/Restart order=0 placeholder=false)
+        | Restart [guide](tolarix://page/Guide).
+warning Guide broken-link
+warning Guide link-outside-master
+warning Home subpages-list

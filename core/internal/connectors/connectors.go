@@ -76,6 +76,11 @@ type MirrorItem struct {
 	ID   string // the target's own id (equal to Key for file-based targets)
 	Key  string
 	Hash string // hash of the stored content, comparable with WritePage results
+	// Version, when set, changes whenever the page changes in the target. Targets
+	// that rewrite what they store (Confluence normalises storage XML) set it,
+	// and edits made on the mirror are detected by comparing versions instead of
+	// hashes. WritePage then reports Hash = ContentHash(sent content).
+	Version string
 }
 
 // PageWrite asks a session to create, update or move a page.
@@ -107,6 +112,13 @@ type Session interface {
 	DeleteAttachment(ctx context.Context, key string) error
 	// Finish flushes buffered writes. commit=false discards them.
 	Finish(ctx context.Context, commit bool) error
+}
+
+// Buffering is implemented by sessions that apply their writes only in
+// Finish (git-based targets push one commit). The engine then saves mapping
+// changes only after Finish succeeds.
+type Buffering interface {
+	BuffersWrites() bool
 }
 
 // Warning is a non-fatal issue recorded in the run report.

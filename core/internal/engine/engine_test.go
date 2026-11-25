@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -356,3 +357,47 @@ func hasSourceWarning(rep *Report, code string) bool {
 var _ connectors.Source = (*fakeSource)(nil)
 var _ connectors.Target = (*fakeMirror)(nil)
 var _ = model.NewTree
+
+// bufferedSession imitates a git target: writes count only if Finish succeeds.
+type bufferedSession struct {
+	connectors.Session
+	finishErr error
+}
+
+func (b *bufferedSession) BuffersWrites() bool { return true }
+
+func (b *bufferedSession) Finish(ctx context.Context, commit bool) error {
+	if b.finishErr != nil {
+		return b.finishErr
+	}
+	return b.Session.Finish(ctx, commit)
+}
+
+func TestBufferedSessionSavesMappingsOnlyAfterFinish(t *testing.T) {
+	h := newHarness(t)
+	runWith := func(finishErr error) *Report {
+		sess, _ := h.mirror.Open(context.Background(), nil)
+		e := &Engine{Mappings: h.store}
+		rep, err := e.Run(context.Background(), Request{Source: h.src, Options: h.opts,
+			Targets: []Target{{ID: "t1", Name: "mirror", Session: &bufferedSession{Session: sess, finishErr: finishErr}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+	rep := runWith(errors.New("push rejected"))
+	expectCounts(t, rep, map[string]int{"Failed": 4})
+	if !strings.Contains(rep.Targets[0].Ops[0].Error, "not saved: push rejected") {
+		t.Fatalf("op error %q", rep.Targets[0].Ops[0].Error)
+	}
+	if m, _ := h.store.LoadMappings(context.Background(), "t1"); len(m) != 0 {
+		t.Fatalf("mappings saved after a failed push: %+v", m)
+	}
+	// The fake mirror wrote eagerly; empty it as if the push never happened.
+	h.mirror.pages = map[string]string{}
+	rep = runWith(nil)
+	expectCounts(t, rep, map[string]int{"Created": 4})
+	if m, _ := h.store.LoadMappings(context.Background(), "t1"); len(m) != 4 {
+		t.Fatalf("mappings = %d, want 4", len(m))
+	}
+}

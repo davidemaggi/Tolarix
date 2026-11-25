@@ -1,0 +1,12 @@
+<h1>Intro</h1>
+<p>Plain <strong>bold</strong>, <em>italic</em>, <span style="text-decoration: line-through;">gone</span>, <code>a|b</code> and <u>under</u>.&nbsp;Entities: &amp; &lt;tag&gt; *stars* _under_ snake_case [brackets]</p>
+<p>Line one<br/>line two</p>
+<p>1. not a list<br/># not a heading</p>
+<h2>Next   Steps</h2>
+<ul><li>one</li><li>two<ul><li>nested <a href="https://example.com/a b">link</a></li></ul></li></ul>
+<ol start="3"><li><p>three</p></li><li>four</li></ol>
+<hr/>
+<blockquote><p>quoted</p></blockquote>
+<pre>pre  formatted
+  text</pre>
+<p>Emoji <ac:emoticon ac:name="tick"/> and <ac:emoticon ac:name="smile" ac:emoji-fallback="🙂"/></p>

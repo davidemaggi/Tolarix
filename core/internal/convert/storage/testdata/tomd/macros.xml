@@ -1,0 +1,17 @@
+<ac:structured-macro ac:name="toc"><ac:parameter ac:name="maxLevel">3</ac:parameter></ac:structured-macro>
+<ac:structured-macro ac:name="code" ac:schema-version="1"><ac:parameter ac:name="language">c#</ac:parameter><ac:parameter ac:name="linenumbers">true</ac:parameter><ac:plain-text-body><![CDATA[var x = "<b>";
+// ``` fence inside
+]]></ac:plain-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="noformat"><ac:plain-text-body><![CDATA[raw text]]></ac:plain-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="info"><ac:parameter ac:name="title">Heads up</ac:parameter><ac:rich-text-body><p>Info body</p><ul><li>item</li></ul></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="note"><ac:rich-text-body><p>Yellow</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="warning"><ac:rich-text-body><p>Red</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="tip"><ac:rich-text-body><p>Green</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="expand"><ac:parameter ac:name="title">More</ac:parameter><ac:rich-text-body><p>Hidden</p></ac:rich-text-body></ac:structured-macro>
+<p>Status <ac:structured-macro ac:name="status"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">DONE</ac:parameter></ac:structured-macro> and <ac:structured-macro ac:name="jira"><ac:parameter ac:name="key">ABC-1</ac:parameter></ac:structured-macro>.</p>
+<ac:structured-macro ac:name="drawio"><ac:parameter ac:name="diagramName">arch</ac:parameter><ac:parameter ac:name="width">600</ac:parameter></ac:structured-macro>
+<ac:structured-macro ac:name="children"/>
+<p>Before <ac:structured-macro ac:name="gadget"><ac:parameter ac:name="url">x</ac:parameter></ac:structured-macro> after</p>
+<ac:structured-macro ac:name="details"><ac:rich-text-body><p>Kept body</p></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="mermaid-cloud"><ac:plain-text-body><![CDATA[graph TD; A-->B]]></ac:plain-text-body></ac:structured-macro>
+<ac:task-list><ac:task><ac:task-id>1</ac:task-id><ac:task-status>complete</ac:task-status><ac:task-body>done thing</ac:task-body></ac:task><ac:task><ac:task-id>2</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body>open thing</ac:task-body></ac:task></ac:task-list>

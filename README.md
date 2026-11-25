@@ -81,9 +81,9 @@ new wiki means writing one connector; the sync engine doesn't change.
 
 | Wiki | As Master | As Mirror | Status |
 |---|:---:|:---:|---|
-| Obsidian vault | ✅ | ✅ | ✅ works (CLI) |
-| Confluence Data Center / Server | ✅ | ✅ | ⏭️ next up (M4) |
-| Azure DevOps — Code wiki | ✅ | ✅ | ⏭️ next up (M4) |
+| Obsidian vault | ✅ | ✅ | ✅ works |
+| Confluence Data Center / Server | ✅ | ✅ | ✅ works (M4, in review) |
+| Azure DevOps — Code wiki | ✅ | ✅ | ✅ works (M4, in review) |
 | Confluence Cloud | ✅ | ✅ | 🗓️ planned (M5) |
 | Azure DevOps — Project wiki | ✅ | ✅ | 🗓️ planned (M5) |
 
@@ -91,8 +91,8 @@ new wiki means writing one connector; the sync engine doesn't change.
 
 - [x] **M1 · Foundations.** Single binary, SQLite with migrations, encrypted secrets, web shell (i18n, themes), CI
 - [x] **M2 · Sync engine + Obsidian.** Canonical model, incremental sync, moves, delete policies, dry-run, CLI
-- [ ] **M3 · Web app + Docker.** Admin login, guided wizards, dashboard, live run logs
-- [ ] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
+- [x] **M3 · Web app + Docker.** Admin login, guided wizards, dashboard, live run logs
+- [x] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
 - [ ] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
 - [ ] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
 - [ ] **M7 · Desktop app.** Installers for Windows, macOS and Linux
