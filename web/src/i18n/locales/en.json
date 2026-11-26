@@ -287,9 +287,6 @@
     "adopt": "Take over existing pages",
     "adoptHint": "When a Mirror already has a page exactly where a copied page goes, Tolarix updates it instead of stopping with a conflict.",
     "adoptOn": "Existing pages are taken over",
-    "manualOnly": "Runs when you start it",
-    "manualOnlyHint": "Automatic schedules are coming in a later version. Until then, use Run now, or \"tolarix run-due\" from cron.",
-    "timezone": "Server timezone: {{tz}}",
     "create": "Create flow",
     "created": "Flow \"{{name}}\" created. Try a dry-run to see what it will do.",
     "saved": "Flow \"{{name}}\" saved."
@@ -412,5 +409,46 @@
     "title": "Page not found",
     "body": "This page does not exist.",
     "back": "Back to the dashboard"
+  },
+  "schedule": {
+    "tabs": "Schedule type",
+    "simple": "Simple",
+    "advanced": "Advanced (cron expression)",
+    "kindLabel": "When should it run?",
+    "kind": {
+      "manual": "Only when I run it manually",
+      "interval": "Every N minutes or hours",
+      "daily": "Every day at…",
+      "weekly": "On these weekdays at…",
+      "monthly": "Every month on day… at…"
+    },
+    "every": "Every",
+    "unit": "Unit",
+    "units": {
+      "minutes": "minutes",
+      "hours": "hours"
+    },
+    "time": "At",
+    "days": "Weekdays",
+    "day": "Day of the month",
+    "dayHint": "Months without this day are skipped.",
+    "expr": "Cron expression",
+    "exprHint": "Five fields: minute, hour, day of month, month, weekday (e.g. 0 7 * * 1-5), or @daily, @weekly, @monthly. Times are in the timezone below.",
+    "timezone": "Timezone",
+    "timezoneHint": "Schedule times are in this timezone. Default: the server's ({{tz}}).",
+    "builtIn": "Run with the built-in scheduler",
+    "builtInHint": "Turn it off to start this flow from your own cron with \"tolarix run-due\" instead.",
+    "builtInOff": "Runs only via \"tolarix run-due\"",
+    "preview": "Preview",
+    "cron": "Cron",
+    "nextRuns": "Next runs",
+    "manualPreview": "It runs only when you start it, with Run now or \"tolarix run …\".",
+    "loading": "Computing…",
+    "daysRequired": "Choose at least one weekday.",
+    "exprRequired": "Enter a cron expression.",
+    "timezoneRequired": "Enter a timezone.",
+    "nextRun": "Next run",
+    "noNextRun": "Not scheduled",
+    "disabledNote": "The flow is disabled, so it does not run by itself."
   }
 }

@@ -68,6 +68,8 @@ type Backend struct {
 	Limiter *auth.Limiter
 	// PollInterval is how often live logs re-read the database (default 1s).
 	PollInterval time.Duration
+	// Wake tells the built-in scheduler that a flow changed (nil: no scheduler).
+	Wake func()
 }
 
 const (

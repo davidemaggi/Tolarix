@@ -287,9 +287,6 @@
     "adopt": "Prendi in carico le pagine esistenti",
     "adoptHint": "Se un Mirror ha già una pagina esattamente dove va una pagina copiata, Tolarix la aggiorna invece di fermarsi con un conflitto.",
     "adoptOn": "Le pagine esistenti vengono prese in carico",
-    "manualOnly": "Si esegue quando lo avvii",
-    "manualOnlyHint": "Le pianificazioni automatiche arriveranno in una versione successiva. Nel frattempo usa Esegui ora, oppure \"tolarix run-due\" da cron.",
-    "timezone": "Fuso orario del server: {{tz}}",
     "create": "Crea flusso",
     "created": "Flusso \"{{name}}\" creato. Prova una simulazione per vedere cosa farà.",
     "saved": "Flusso \"{{name}}\" salvato."
@@ -412,5 +409,46 @@
     "title": "Pagina non trovata",
     "body": "Questa pagina non esiste.",
     "back": "Torna alla panoramica"
+  },
+  "schedule": {
+    "tabs": "Tipo di pianificazione",
+    "simple": "Semplice",
+    "advanced": "Avanzata (espressione cron)",
+    "kindLabel": "Quando deve essere eseguito?",
+    "kind": {
+      "manual": "Solo quando lo avvio manualmente",
+      "interval": "Ogni N minuti o ore",
+      "daily": "Ogni giorno alle…",
+      "weekly": "In questi giorni della settimana alle…",
+      "monthly": "Ogni mese il giorno… alle…"
+    },
+    "every": "Ogni",
+    "unit": "Unità",
+    "units": {
+      "minutes": "minuti",
+      "hours": "ore"
+    },
+    "time": "Alle",
+    "days": "Giorni della settimana",
+    "day": "Giorno del mese",
+    "dayHint": "I mesi senza questo giorno vengono saltati.",
+    "expr": "Espressione cron",
+    "exprHint": "Cinque campi: minuto, ora, giorno del mese, mese, giorno della settimana (es. 0 7 * * 1-5), oppure @daily, @weekly, @monthly. Gli orari sono nel fuso orario qui sotto.",
+    "timezone": "Fuso orario",
+    "timezoneHint": "Gli orari della pianificazione sono in questo fuso orario. Predefinito: quello del server ({{tz}}).",
+    "builtIn": "Esegui con lo scheduler integrato",
+    "builtInHint": "Disattivalo per avviare questo flusso dal tuo cron con \"tolarix run-due\".",
+    "builtInOff": "Si esegue solo tramite \"tolarix run-due\"",
+    "preview": "Anteprima",
+    "cron": "Cron",
+    "nextRuns": "Prossime esecuzioni",
+    "manualPreview": "Si esegue solo quando lo avvii, con Esegui ora o \"tolarix run …\".",
+    "loading": "Calcolo in corso…",
+    "daysRequired": "Scegli almeno un giorno della settimana.",
+    "exprRequired": "Inserisci un'espressione cron.",
+    "timezoneRequired": "Inserisci un fuso orario.",
+    "nextRun": "Prossima esecuzione",
+    "noNextRun": "Non pianificato",
+    "disabledNote": "Il flusso è disattivato, quindi non si esegue da solo."
   }
 }

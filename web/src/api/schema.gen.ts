@@ -126,6 +126,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/schedules/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Explain a schedule before saving it
+     * @description Validates a schedule and returns its cron expression, a sentence in
+     *     the requested language and the next 5 run times, counted from now.
+     *     Used live by the schedule wizard. Invalid input is a 400 with
+     *     per-field messages ("schedule.time", "timezone", ...).
+     */
+    post: operations["previewSchedule"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/connections/{id}": {
     parameters: {
       query?: never;
@@ -434,11 +457,45 @@ export interface components {
       /** @description Take over pages Tolarix did not create when they sit exactly where a mirrored page goes */
       adoptExisting?: boolean;
     };
-    /** @description When the flow runs by itself. Only "manual" until the built-in scheduler ships. */
+    /**
+     * @description When the flow runs by itself. Each kind uses only its own fields:
+     *     manual (none); interval (every, unit: every 5/10/15/20/30 minutes or
+     *     1/2/3/4/6/8/12 hours); daily (time); weekly (days, time); monthly
+     *     (day, time; months without that day are skipped); cron (expr: 5 fields
+     *     or a descriptor such as @daily, no seconds, no timezone prefix).
+     *     Times are in the flow's timezone.
+     */
     Schedule: {
-      kind: string;
-    } & {
-      [key: string]: unknown;
+      /** @enum {string} */
+      kind: "manual" | "interval" | "daily" | "weekly" | "monthly" | "cron";
+      every?: number;
+      /** @enum {string} */
+      unit?: "minutes" | "hours";
+      /** @example 07:30 */
+      time?: string;
+      days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+      day?: number;
+      /** @example 0 7 * * 1-5 */
+      expr?: string;
+    };
+    SchedulePreviewRequest: {
+      schedule: components["schemas"]["Schedule"];
+      /** @description IANA timezone (default the server timezone) */
+      timezone?: string;
+      /**
+       * @description Language of the sentence (default from Accept-Language)
+       * @enum {string}
+       */
+      lang?: "en" | "it";
+    };
+    SchedulePreview: {
+      /** @example Every weekday at 07:30, Europe/Rome */
+      description: string;
+      /** @description The cron expression; empty for a manual schedule */
+      cron: string;
+      timezone: string;
+      /** @description The next 5 run times (empty for a manual schedule) */
+      next: string[];
     };
     FlowTarget: {
       /** @description Keep it when updating so the Mirror keeps its page mapping */
@@ -460,7 +517,10 @@ export interface components {
       scope: components["schemas"]["Scope"];
       options: components["schemas"]["FlowOptions"];
       schedule?: components["schemas"]["Schedule"];
-      /** @default true */
+      /**
+       * @description Run with the built-in scheduler; off leaves it to "tolarix run-due" (cron)
+       * @default true
+       */
       scheduleEnabled: boolean;
       timezone?: string;
       targets: components["schemas"]["FlowTarget"][];
@@ -480,9 +540,13 @@ export interface components {
       running?: components["schemas"]["RunningInfo"];
       /**
        * Format: date-time
-       * @description Next scheduled run (empty until the built-in scheduler ships)
+       * @description When the flow runs by itself next; absent for a disabled flow or a
+       *     manual schedule. With scheduleEnabled false the built-in scheduler
+       *     skips the flow and only "tolarix run-due" runs it at this time.
        */
       nextRunAt?: string;
+      /** @description The schedule as a sentence, in the language of Accept-Language */
+      scheduleText: string;
       /** Format: date-time */
       createdAt: string;
       /** Format: date-time */
@@ -790,6 +854,31 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TestResult"];
+        };
+      };
+      400: components["responses"]["Error"];
+    };
+  };
+  previewSchedule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SchedulePreviewRequest"];
+      };
+    };
+    responses: {
+      /** @description The explained schedule */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SchedulePreview"];
         };
       };
       400: components["responses"]["Error"];

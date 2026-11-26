@@ -116,7 +116,7 @@ func NewRootCommand(stdout, stderr io.Writer) *cobra.Command {
 	pf.StringVar(&opts.logLevel, "log-level", "", "log level: debug, info, warn, error (env TOLARIX_LOG_LEVEL; default info)")
 	pf.StringVar(&opts.logFormat, "log-format", "", "log format: text or json (env TOLARIX_LOG_FORMAT; default text)")
 
-	root.AddCommand(newVersionCommand(a), newServeCommand(a), newConnectionCommand(a), newFlowCommand(a), newRunsCommand(a),
+	root.AddCommand(newVersionCommand(a), newServeCommand(a), newConnectionCommand(a), newFlowCommand(a), newRunDueCommand(a), newRunsCommand(a),
 		newAdminCommand(a), newHealthcheckCommand(a))
 	return root
 }

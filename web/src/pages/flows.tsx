@@ -57,6 +57,7 @@ export function FlowsPage() {
                 <TableHead>{t("flowWizard.master")}</TableHead>
                 <TableHead>{t("flowWizard.step.mirrors")}</TableHead>
                 <TableHead>{t("flows.lastRun")}</TableHead>
+                <TableHead>{t("schedule.nextRun")}</TableHead>
                 <TableHead className="w-0">
                   <span className="sr-only">{t("common.actions")}</span>
                 </TableHead>
@@ -94,6 +95,15 @@ export function FlowsPage() {
                       </Link>
                     ) : (
                       <span className="text-muted-foreground">{t("dashboard.neverRun")}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {f.nextRunAt ? (
+                      <time dateTime={f.nextRunAt} title={f.scheduleText}>
+                        {fmt.dateTime(f.nextRunAt)}
+                      </time>
+                    ) : (
+                      <span className="text-muted-foreground">{t("schedule.noNextRun")}</span>
                     )}
                   </TableCell>
                   <TableCell>

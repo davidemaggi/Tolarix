@@ -224,3 +224,57 @@ func TestMarkInterruptedRuns(t *testing.T) {
 		t.Fatal(got.Status)
 	}
 }
+
+func TestScheduleAnchorAndClaim(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openTemp(t)
+	f := seedFlow(t, s)
+	if f.ScheduleAnchor == "" || !f.Anchor().Equal(f.CreatedAt) {
+		t.Fatalf("anchor on create = %q", f.ScheduleAnchor)
+	}
+
+	// Claiming moves the anchor; a second claimer with the old value loses.
+	at := time.Now().Add(time.Minute)
+	if ok, err := s.ClaimSchedule(ctx, f.ID, f.ScheduleAnchor, at); err != nil || !ok {
+		t.Fatalf("claim: %v %v", ok, err)
+	}
+	if ok, _ := s.ClaimSchedule(ctx, f.ID, f.ScheduleAnchor, at); ok {
+		t.Fatal("a stale claim must fail")
+	}
+	got, _ := s.GetFlow(ctx, f.ID)
+	if !got.Anchor().Equal(at.UTC().Truncate(time.Nanosecond)) {
+		t.Fatalf("anchor = %v, want %v", got.Anchor(), at)
+	}
+
+	// Editing other fields keeps the anchor; changing the schedule resets it.
+	got.Name = "Renamed"
+	saved, err := s.SaveFlow(ctx, got)
+	if err != nil || saved.ScheduleAnchor != got.ScheduleAnchor {
+		t.Fatalf("rename changed the anchor: %v %q -> %q", err, got.ScheduleAnchor, saved.ScheduleAnchor)
+	}
+	for _, change := range []func(*Flow){
+		func(f *Flow) { f.Schedule = json.RawMessage(`{"kind":"daily","time":"07:30"}`) },
+		func(f *Flow) { f.Timezone = "Europe/Rome" },
+		func(f *Flow) { f.Enabled = !f.Enabled },
+		func(f *Flow) { f.ScheduleEnabled = !f.ScheduleEnabled },
+	} {
+		before := saved.ScheduleAnchor
+		change(&saved)
+		if saved, err = s.SaveFlow(ctx, saved); err != nil || saved.ScheduleAnchor == before {
+			t.Fatalf("anchor not reset: %v %q", err, before)
+		}
+	}
+
+	// Rows from before the anchor column fall back to updated_at, and get
+	// an anchor on the next save.
+	if _, err := s.DB.ExecContext(ctx, `UPDATE flows SET schedule_anchor = '' WHERE id = ?`, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	legacy, _ := s.GetFlow(ctx, f.ID)
+	if !legacy.Anchor().Equal(legacy.UpdatedAt) {
+		t.Fatal("empty anchor must fall back to updated_at")
+	}
+	if saved, _ = s.SaveFlow(ctx, legacy); saved.ScheduleAnchor == "" {
+		t.Fatal("save must fill an empty anchor")
+	}
+}

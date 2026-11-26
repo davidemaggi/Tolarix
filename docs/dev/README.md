@@ -127,6 +127,8 @@ core/                     Go module github.com/davidemaggi/tolarix/core
   internal/render/        renderer pipeline (derived attachments, e.g. draw.io -> PNG)
     drawio/               draw.io -> PNG: preview, cache, export server, draw.io Desktop
   internal/runner/        runs a stored flow: lock + heartbeat, run row, live events, report
+  internal/schedule/      schedule model: validation, cron mapping, en/it sentence, next runs
+  internal/scheduler/     when flows are due (anchor + claim), built-in scheduler, shared with run-due
   internal/secrets/       AES-GCM cipher, key loading, secrets.String (redacts itself)
   internal/store/         SQLite open, goose migrations, repositories (connections, flows, mappings, runs, locks)
   internal/testkit/       golden-file helpers and the YAML fixture form of a canonical tree

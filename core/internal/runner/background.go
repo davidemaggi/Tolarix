@@ -28,11 +28,17 @@ func NewBackground(r *Runner) *Background {
 
 // Start begins a run and returns it as soon as it is recorded.
 func (b *Background) Start(flow store.Flow, trigger string, dryRun bool) (store.Run, error) {
+	run, _, err := b.StartWatch(flow, trigger, dryRun)
+	return run, err
+}
+
+// StartWatch is Start that also returns a channel closed when the run ends.
+func (b *Background) StartWatch(flow store.Flow, trigger string, dryRun bool) (store.Run, <-chan struct{}, error) {
 	ctx, cancel := context.WithCancel(b.base)
 	h, err := b.runner.Start(ctx, flow, trigger, dryRun)
 	if err != nil {
 		cancel()
-		return store.Run{}, err
+		return store.Run{}, nil, err
 	}
 	b.mu.Lock()
 	b.active[h.Run.ID] = cancel
@@ -46,7 +52,14 @@ func (b *Background) Start(flow store.Flow, trigger string, dryRun bool) (store.
 		b.mu.Unlock()
 		cancel()
 	}()
-	return h.Run, nil
+	return h.Run, h.Done(), nil
+}
+
+// Active is the number of runs in progress in this process.
+func (b *Background) Active() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.active)
 }
 
 // Cancel stops a run started by this manager. It returns false when the run

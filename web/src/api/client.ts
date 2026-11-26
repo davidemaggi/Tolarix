@@ -1,5 +1,7 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
+import i18n from "@/i18n";
+
 import type { components, paths } from "./schema.gen";
 
 export type Schemas = components["schemas"];
@@ -13,6 +15,8 @@ export type Flow = Schemas["Flow"];
 export type FlowInput = Schemas["FlowInput"];
 export type FlowOptions = Schemas["FlowOptions"];
 export type Scope = Schemas["Scope"];
+export type Schedule = Schemas["Schedule"];
+export type SchedulePreview = Schemas["SchedulePreview"];
 export type Run = Schemas["Run"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunStatus = Schemas["RunStatus"];
@@ -55,6 +59,8 @@ export function onAuthProblem(listener: AuthListener | undefined) {
 
 const middleware: Middleware = {
   onRequest({ request }) {
+    // Sentences the server writes (schedules) follow the UI language.
+    request.headers.set("Accept-Language", i18n.resolvedLanguage ?? "en");
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && csrfToken) {
       request.headers.set(CSRF_HEADER, csrfToken);
     }

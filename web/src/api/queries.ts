@@ -1,4 +1,11 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -10,6 +17,7 @@ import {
   type Config,
   type FlowInput,
   type RunStatus,
+  type Schedule,
 } from "./client";
 
 export const keys = {
@@ -208,6 +216,39 @@ export function useFlow(id: string | undefined) {
       unwrap(api.GET("/flows/{id}", { params: { path: { id: id! } }, signal })),
     enabled: !!id,
     refetchInterval: (q) => (q.state.data?.running ? 3_000 : false),
+  });
+}
+
+/** A value that follows `value` once it stopped changing for `ms`. */
+export function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return debounced;
+}
+
+/** The server's explanation of a schedule: sentence, cron and next runs. */
+export function useSchedulePreview(schedule: Schedule, timezone: string) {
+  const { i18n } = useTranslation();
+  const lang = i18n.resolvedLanguage === "it" ? "it" : "en";
+  // Typing a cron expression or a timezone should not send a request per key.
+  const key = useDebounced(JSON.stringify({ schedule, timezone }), 300);
+  return useQuery({
+    queryKey: ["schedule-preview", key, lang],
+    queryFn: ({ signal }) => {
+      const input = JSON.parse(key) as { schedule: Schedule; timezone: string };
+      return unwrap(
+        api.POST("/schedules/preview", {
+          body: { schedule: input.schedule, timezone: input.timezone || undefined, lang },
+          signal,
+        }),
+      );
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    retry: false,
   });
 }
 

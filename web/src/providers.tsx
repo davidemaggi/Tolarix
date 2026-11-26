@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import i18n from "@/i18n";
 
 import { ApiError } from "@/api/client";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -19,6 +21,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+  useEffect(() => {
+    // Flows carry a schedule sentence in the UI language.
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["flows"] });
+    i18n.on("languageChanged", refresh);
+    return () => i18n.off("languageChanged", refresh);
+  }, [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

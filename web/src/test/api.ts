@@ -108,6 +108,7 @@ export const makeFlow = (over: Partial<Flow> = {}): Flow => ({
   schedule: { kind: "manual" },
   scheduleEnabled: false,
   timezone: "Europe/Rome",
+  scheduleText: "Only when run manually",
   targets: [{ id: "t1", connectionId: "c2", location: {} }],
   createdAt: stamp,
   updatedAt: stamp,
@@ -131,6 +132,20 @@ const defaults: Record<string, Handler> = {
   "GET /connections": () => [],
   "GET /flows": () => [],
   "GET /runs": () => ({ items: [] }),
+  "POST /schedules/preview": ({ body }) => {
+    const { schedule, timezone = "Europe/Rome" } = body as {
+      schedule: { kind: string };
+      timezone?: string;
+    };
+    return schedule.kind === "manual"
+      ? { description: "Only when run manually", cron: "", timezone, next: [] }
+      : {
+          description: `A ${schedule.kind} schedule, ${timezone}`,
+          cron: "0 7 * * 1-5",
+          timezone,
+          next: ["2026-11-27T06:00:00Z", "2026-11-30T06:00:00Z"],
+        };
+  },
 };
 
 export function apiError(status: number, code: string, message = code, fields?: object) {

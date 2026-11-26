@@ -19,11 +19,14 @@ import {
   useFlow,
   usePageTitles,
   useSaveFlow,
+  useSchedulePreview,
   useSession,
 } from "@/api/queries";
 import { Field, FormError } from "@/components/field";
 import { PageHeader } from "@/components/page-header";
 import { BackLink, QueryError } from "@/components/query-state";
+import { ScheduleEditor } from "@/components/schedule-editor";
+import { scheduleDraft, scheduleOf, validateSchedule, type ScheduleDraft } from "@/lib/schedule";
 import { ScopePicker } from "@/components/scope-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +57,7 @@ function stepOf(field: string): Step {
   if (field.startsWith("scope")) return "scope";
   if (field.startsWith("targets")) return "mirrors";
   if (field.startsWith("options")) return "options";
-  if (field === "schedule" || field === "timezone") return "schedule";
+  if (field.startsWith("schedule") || field === "timezone") return "schedule";
   return "master";
 }
 
@@ -72,6 +75,10 @@ type Draft = {
   scope: Scope;
   options: Required<Omit<FlowOptions, "bannerText">> & { bannerText: string };
   targets: TargetDraft[];
+  schedule: ScheduleDraft;
+  scheduleEnabled: boolean;
+  /** Undefined until edited: a new flow uses the server's timezone. */
+  timezone?: string;
 };
 
 let nextKey = 1;
@@ -91,6 +98,8 @@ function draftFrom(flow?: Flow): Draft {
         adoptExisting: false,
       },
       targets: [{ key: nextKey++, connectionId: "", location: {} }],
+      schedule: scheduleDraft(),
+      scheduleEnabled: true,
     };
   }
   return {
@@ -113,6 +122,9 @@ function draftFrom(flow?: Flow): Draft {
         Object.entries((m.location ?? {}) as Config).map(([k, v]) => [k, String(v ?? "")]),
       ),
     })),
+    schedule: scheduleDraft(flow.schedule),
+    scheduleEnabled: flow.scheduleEnabled,
+    timezone: flow.timezone,
   };
 }
 
@@ -179,6 +191,11 @@ function Wizard({
   // Page titles seen in the scope tree, for the summaries.
   const titles = usePageTitles(draft.sourceConnectionId);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const defaultTimezone = session.data?.timezone ?? "UTC";
+  const timezone = draft.timezone ?? defaultTimezone;
+  const schedule = scheduleOf(draft.schedule);
+  const preview = useSchedulePreview(schedule, timezone);
+  const previewErrors = fieldErrors(preview.error);
 
   const kindOf = useMemo(() => {
     const byKind = new Map(kinds.map((k) => [k.kind, k]));
@@ -200,6 +217,14 @@ function Wizard({
       ...d,
       targets: d.targets.map((x) => (x.key === key ? { ...x, ...patch } : x)),
     }));
+
+  // The live preview checks the schedule from here on: drop the old messages.
+  const updateSchedule = (patch: Partial<Draft>) => {
+    update(patch);
+    setErrors((e) =>
+      Object.fromEntries(Object.entries(e).filter(([k]) => stepOf(k) !== "schedule")),
+    );
+  };
 
   const validateStep = (s: Step): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -235,6 +260,7 @@ function Wizard({
     if (s === "options" && draft.options.bannerText.length > MAX_BANNER) {
       errs["options.bannerText"] = t("validation.tooLong", { max: MAX_BANNER });
     }
+    if (s === "schedule") Object.assign(errs, validateSchedule(draft.schedule, timezone, t));
     return errs;
   };
 
@@ -260,9 +286,9 @@ function Wizard({
       ...draft.options,
       bannerText: draft.options.bannerText.trim() || undefined,
     },
-    schedule: flow?.schedule ?? { kind: "manual" },
-    scheduleEnabled: flow?.scheduleEnabled ?? true,
-    timezone: flow?.timezone,
+    schedule,
+    scheduleEnabled: draft.scheduleEnabled,
+    timezone: timezone.trim(),
     targets: draft.targets.map((m) => {
       const fields = kindOf(m.connectionId)?.locationFields ?? [];
       const location: Config = {};
@@ -599,15 +625,19 @@ function Wizard({
         )}
 
         {step === "schedule" && (
-          <div className="space-y-3 rounded-lg border p-4">
-            <p className="font-medium">{t("flowWizard.manualOnly")}</p>
-            <p className="text-sm text-muted-foreground">{t("flowWizard.manualOnlyHint")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("flowWizard.timezone", {
-                tz: flow?.timezone ?? session.data?.timezone ?? "UTC",
-              })}
-            </p>
-          </div>
+          <ScheduleEditor
+            value={draft.schedule}
+            onChange={(d) => updateSchedule({ schedule: d })}
+            timezone={timezone}
+            defaultTimezone={defaultTimezone}
+            onTimezoneChange={(tz) => updateSchedule({ timezone: tz })}
+            builtIn={draft.scheduleEnabled}
+            onBuiltInChange={(v) => update({ scheduleEnabled: v })}
+            preview={preview.isError ? undefined : preview.data}
+            previewPending={preview.isFetching}
+            // The live preview's messages, until the user saves.
+            errors={{ ...previewErrors, ...errors }}
+          />
         )}
 
         {step === "review" && (
@@ -661,7 +691,10 @@ function Wizard({
               </ul>
             </ReviewRow>
             <ReviewRow label={t("flowWizard.step.schedule")} onEdit={() => goTo("schedule")}>
-              {t("flowWizard.manualOnly")}
+              {preview.data?.description ?? "…"}
+              {schedule.kind !== "manual" && !draft.scheduleEnabled && (
+                <span className="block text-muted-foreground">{t("schedule.builtInOff")}</span>
+              )}
             </ReviewRow>
           </dl>
         )}

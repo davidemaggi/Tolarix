@@ -14,6 +14,7 @@ import { RunTable } from "@/components/run-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessage } from "@/lib/errors";
+import { useFormatters } from "@/lib/format";
 
 export function FlowDetailPage() {
   const { t } = useTranslation();
@@ -24,6 +25,15 @@ export function FlowDetailPage() {
   const runs = useRuns({ flowId: id }, 10);
   const del = useDeleteFlow();
   const [confirm, setConfirm] = useState(false);
+  const fmt = useFormatters();
+  // In the flow's timezone, the one its schedule is written in.
+  const nextRun = (iso: string, timeZone: string) => {
+    try {
+      return `${fmt.dateTime(iso, { timeZone })} (${timeZone})`;
+    } catch {
+      return fmt.dateTime(iso);
+    }
+  };
   const nameOf = (cid: string) => connections.data?.find((c) => c.id === cid)?.name ?? "…";
 
   const back = <BackLink to="/flows">{t("flows.title")}</BackLink>;
@@ -116,7 +126,25 @@ export function FlowDetailPage() {
         </div>
         <div>
           <dt className="text-muted-foreground">{t("flowWizard.step.schedule")}</dt>
-          <dd>{t("flowWizard.manualOnly")}</dd>
+          <dd>
+            {f.scheduleText}
+            {f.schedule.kind !== "manual" &&
+              (!f.enabled ? (
+                <span className="block text-muted-foreground">{t("schedule.disabledNote")}</span>
+              ) : (
+                <>
+                  {f.nextRunAt && (
+                    <span className="block text-muted-foreground">
+                      {t("schedule.nextRun")}:{" "}
+                      <time dateTime={f.nextRunAt}>{nextRun(f.nextRunAt, f.timezone)}</time>
+                    </span>
+                  )}
+                  {!f.scheduleEnabled && (
+                    <span className="block text-muted-foreground">{t("schedule.builtInOff")}</span>
+                  )}
+                </>
+              ))}
+          </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">{t("flows.state")}</dt>

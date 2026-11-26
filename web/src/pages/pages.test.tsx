@@ -1,9 +1,10 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 
 import type { ConnectorKind } from "@/api/client";
 import {
+  apiError,
   FakeEventSource,
   makeConnection,
   makeEvent,
@@ -176,7 +177,123 @@ describe("flow wizard", () => {
       scope: { mode: "all", exclude: ["p2"] },
       targets: [{ connectionId: "c2", location: {} }],
       options: { deletePolicy: "archive", attachments: true, banner: true },
+      schedule: { kind: "manual" },
+      scheduleEnabled: true,
+      timezone: "Europe/Rome",
     });
+  });
+
+  // Opens an existing flow in the wizard and walks to the schedule step.
+  async function openSchedule(routes: Parameters<typeof mockApi>[0] = {}) {
+    const user = userEvent.setup();
+    const api = mockApi({
+      "GET /connections": () => [master, mirror],
+      "GET /connections/:id/browse": () => [],
+      "GET /flows/:id": () => makeFlow({ id: "f5", scheduleEnabled: true }),
+      "PUT /flows/:id": ({ body }) => makeFlow({ ...(body as object), id: "f5" }),
+      ...routes,
+    });
+    renderApp("/flows/f5/edit");
+    const next = await screen.findByRole("button", { name: "Next" });
+    for (const step of ["What to mirror", "Mirrors", "Options", "Schedule"]) {
+      await user.click(next);
+      await screen.findByRole("heading", { name: step });
+    }
+    return { user, next, ...api };
+  }
+
+  it("sets a weekday schedule with a live preview", async () => {
+    const { user, next, calls } = await openSchedule({
+      "POST /schedules/preview": ({ body }) => {
+        const { schedule } = body as { schedule: { kind: string; days?: string[] } };
+        if (schedule.kind === "manual") {
+          return {
+            description: "Only when run manually",
+            cron: "",
+            timezone: "Europe/Rome",
+            next: [],
+          };
+        }
+        return {
+          description: `Every ${schedule.days?.join("/")} at 08:15, Europe/Rome`,
+          cron: "15 8 * * 1-4",
+          timezone: "Europe/Rome",
+          next: ["2026-11-30T07:15:00Z"],
+        };
+      },
+    });
+    expect(await screen.findByTestId("schedule-sentence")).toHaveTextContent(
+      "Only when run manually",
+    );
+    // The built-in switch only matters for automatic schedules.
+    expect(screen.queryByLabelText("Run with the built-in scheduler")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "On these weekdays at…" }));
+    // Monday to Friday by default: leave Friday out and move the time.
+    await user.click(screen.getByRole("button", { name: "Friday", pressed: true }));
+    fireEvent.change(screen.getByLabelText("At"), { target: { value: "08:15" } });
+
+    expect(
+      await screen.findByText("Every mon/tue/wed/thu at 08:15, Europe/Rome"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("schedule-cron")).toHaveTextContent("15 8 * * 1-4");
+    const preview = screen.getByRole("region", { name: "Preview" });
+    expect(within(preview).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(preview).getByRole("listitem")).toHaveTextContent("Monday");
+    expect(calls.filter((c) => c.path === "/schedules/preview").at(-1)?.body).toMatchObject({
+      schedule: { kind: "weekly", days: ["mon", "tue", "wed", "thu"], time: "08:15" },
+      timezone: "Europe/Rome",
+      lang: "en",
+    });
+
+    // Leave it to cron instead of the built-in scheduler.
+    await user.click(screen.getByRole("switch", { name: "Run with the built-in scheduler" }));
+    await user.click(next);
+    await screen.findByRole("heading", { name: "Review" });
+    expect(screen.getByText("Every mon/tue/wed/thu at 08:15, Europe/Rome")).toBeInTheDocument();
+    expect(screen.getByText('Runs only via "tolarix run-due"')).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await screen.findByRole("heading", { level: 1, name: "Handbook" });
+    expect(calls.find((c) => c.method === "PUT")?.body).toMatchObject({
+      schedule: { kind: "weekly", days: ["mon", "tue", "wed", "thu"], time: "08:15" },
+      scheduleEnabled: false,
+      timezone: "Europe/Rome",
+    });
+  });
+
+  it("checks a cron expression and shows the server's message", async () => {
+    const { user, next } = await openSchedule({
+      "POST /schedules/preview": ({ body }) => {
+        const { schedule } = body as { schedule: { kind: string; expr?: string } };
+        if (schedule.kind === "cron" && schedule.expr === "61 7 * * *") {
+          return apiError(400, "invalid", "invalid", {
+            "schedule.expr": "Minute 61 is out of range.",
+          });
+        }
+        return {
+          description: "Every day at 07:30, Europe/Rome",
+          cron: schedule.kind === "cron" ? (schedule.expr ?? "") : "30 7 * * *",
+          timezone: "Europe/Rome",
+          next: [],
+        };
+      },
+    });
+    await user.click(screen.getByRole("radio", { name: "Every day at…" }));
+    await screen.findByText("Every day at 07:30, Europe/Rome");
+
+    // The advanced tab starts from what the simple form describes.
+    await user.click(screen.getByRole("tab", { name: "Advanced (cron expression)" }));
+    const expr = screen.getByLabelText("Cron expression");
+    expect(expr).toHaveValue("30 7 * * *");
+
+    await user.clear(expr);
+    await user.click(next);
+    expect(screen.getByText("Enter a cron expression.")).toBeInTheDocument();
+
+    await user.type(expr, "61 7 * * *");
+    expect(await screen.findByText("Minute 61 is out of range.")).toBeInTheDocument();
+    expect(expr).toHaveAttribute("aria-invalid", "true");
   });
 });
 

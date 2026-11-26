@@ -33,3 +33,13 @@ flows:
       attachments: true         # copy images and files (default true)
       banner: true              # "This page is mirrored from ..." on every page
       adoptExisting: false      # take over same-named pages Tolarix did not create
+    # When it runs by itself (times are in `timezone`):
+    #   { kind: manual }                                  only when started (default)
+    #   { kind: interval, every: 30, unit: minutes }      5/10/15/20/30 minutes or 1/2/3/4/6/8/12 hours
+    #   { kind: daily, time: "07:30" }
+    #   { kind: weekly, days: [mon, tue, wed, thu, fri], time: "07:30" }
+    #   { kind: monthly, day: 1, time: "06:00" }          months without that day are skipped
+    #   { kind: cron, expr: "0 7 * * 1-5" }               5 fields or @daily/@weekly/@monthly
+    schedule: { kind: weekly, days: [mon, tue, wed, thu, fri], time: "07:30" }
+    timezone: Europe/Rome       # default: TOLARIX_TIMEZONE, TZ or UTC
+    builtInSchedule: true       # false: only `tolarix run-due` (from your cron) runs it

@@ -69,9 +69,25 @@ test("first start: change password, connect two vaults, create a flow and run it
   await pick(page, "Wiki", "Public vault");
   await next.click();
   await next.click();
+
+  // Schedule: weekdays at 07:30 (the default time), explained by the server.
+  await page.getByRole("radio", { name: "On these weekdays at…" }).click();
+  const preview = page.getByRole("region", { name: "Preview" });
+  await expect(preview.getByText("Every weekday at 07:30, Europe/Rome")).toBeVisible();
+  await expect(preview.getByText("30 7 * * 1-5")).toBeVisible();
+  await expect(preview.getByRole("listitem")).toHaveCount(5);
+  // The advanced tab shows the same schedule as a cron expression.
+  await page.getByRole("tab", { name: "Advanced (cron expression)" }).click();
+  await expect(page.getByRole("textbox", { name: "Cron expression" })).toHaveValue("30 7 * * 1-5");
+  await page.getByRole("tab", { name: "Simple" }).click();
+  // Leave it to "tolarix run-due", so the server never starts it during the test.
+  await page.getByRole("switch", { name: "Run with the built-in scheduler" }).click();
   await next.click();
+  await expect(page.getByText("Every weekday at 07:30, Europe/Rome")).toBeVisible();
   await page.getByRole("button", { name: "Create flow" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Handbook" })).toBeVisible();
+  await expect(page.getByText("Every weekday at 07:30, Europe/Rome")).toBeVisible();
+  await expect(page.getByText('Runs only via "tolarix run-due"')).toBeVisible();
 
   // A dry-run changes nothing.
   await page.getByRole("button", { name: "Dry-run Handbook" }).click();

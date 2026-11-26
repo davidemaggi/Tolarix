@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
 	"github.com/davidemaggi/tolarix/core/internal/engine"
+	"github.com/davidemaggi/tolarix/core/internal/schedule"
 	"github.com/davidemaggi/tolarix/core/internal/secrets"
 	"github.com/davidemaggi/tolarix/core/internal/store"
 )
@@ -26,13 +28,16 @@ type importDoc struct {
 		SecretEnv string         `yaml:"secretEnv"` // read the secret from this environment variable
 	} `yaml:"connections"`
 	Flows []struct {
-		Name     string        `yaml:"name"`
-		Enabled  *bool         `yaml:"enabled"`
-		Master   string        `yaml:"master"`
-		Scope    engine.Scope  `yaml:"scope"`
-		Options  importOptions `yaml:"options"`
-		Timezone string        `yaml:"timezone"`
-		Mirrors  []struct {
+		Name     string         `yaml:"name"`
+		Enabled  *bool          `yaml:"enabled"`
+		Master   string         `yaml:"master"`
+		Scope    engine.Scope   `yaml:"scope"`
+		Options  importOptions  `yaml:"options"`
+		Timezone string         `yaml:"timezone"`
+		Schedule map[string]any `yaml:"schedule"` // as in the API: { kind: daily, time: "07:30" }
+		// BuiltInSchedule false leaves the schedule to "tolarix run-due".
+		BuiltInSchedule *bool `yaml:"builtInSchedule"`
+		Mirrors         []struct {
 			Connection string         `yaml:"connection"`
 			Location   map[string]any `yaml:"location"`
 		} `yaml:"mirrors"`
@@ -65,7 +70,12 @@ flows:
     mirrors:
       - connection: Team vault
         location: { folder: Mirror }
-    options: { deletePolicy: archive, banner: true }`
+    options: { deletePolicy: archive, banner: true }
+    schedule: { kind: weekly, days: [mon, tue, wed, thu, fri], time: "07:30" }
+    # other kinds: { kind: manual } (default), { kind: interval, every: 30, unit: minutes },
+    # { kind: daily, time: "07:30" }, { kind: monthly, day: 1, time: "06:00" }, { kind: cron, expr: "0 7 * * 1-5" }
+    timezone: Europe/Rome                  # default: TOLARIX_TIMEZONE, TZ or UTC
+    # builtInSchedule: false               # leave the schedule to "tolarix run-due" (cron)`
 
 func newFlowImportCommand(a *app) *cobra.Command {
 	return &cobra.Command{
@@ -172,7 +182,29 @@ func importAll(ctx context.Context, a *app, rt *runtime, doc *importDoc, base st
 		var existingTargets []store.FlowTarget
 		if existing, err := rt.store.GetFlow(ctx, f.Name); err == nil {
 			flow.ID, flow.Schedule, flow.ScheduleEnabled = existing.ID, existing.Schedule, existing.ScheduleEnabled
+			if f.Timezone == "" {
+				flow.Timezone = existing.Timezone
+			}
 			existingTargets = existing.Targets
+		}
+		if flow.Timezone == "" {
+			flow.Timezone = instanceTimezone()
+		}
+		if flow.Timezone != "" {
+			if _, err := time.LoadLocation(flow.Timezone); err != nil {
+				return exitErr(ExitUsage, "flow %q: unknown timezone %q", f.Name, flow.Timezone)
+			}
+		}
+		if f.Schedule != nil {
+			raw, _ := json.Marshal(f.Schedule)
+			sc, err := schedule.Parse(raw)
+			if err != nil {
+				return exitErr(ExitUsage, "flow %q: %w", f.Name, err)
+			}
+			flow.Schedule = sc.JSON()
+		}
+		if f.BuiltInSchedule != nil {
+			flow.ScheduleEnabled = *f.BuiltInSchedule
 		}
 		used := map[string]bool{}
 		for _, m := range f.Mirrors {

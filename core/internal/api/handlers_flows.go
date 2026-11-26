@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/davidemaggi/tolarix/core/internal/api/oapi"
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
 	"github.com/davidemaggi/tolarix/core/internal/engine"
+	"github.com/davidemaggi/tolarix/core/internal/schedule"
+	"github.com/davidemaggi/tolarix/core/internal/scheduler"
 	"github.com/davidemaggi/tolarix/core/internal/store"
 )
 
@@ -23,9 +26,11 @@ const maxBannerText = 2000
 type flowState struct {
 	latest map[string]store.Run
 	locks  map[string]store.LockInfo
+	lang   schedule.Lang
 }
 
-func (s *server) flowState(ctx context.Context) (flowState, error) {
+func (s *server) flowState(r *http.Request) (flowState, error) {
+	ctx := r.Context()
 	latest, err := s.b.Store.LatestRuns(ctx)
 	if err != nil {
 		return flowState{}, err
@@ -34,7 +39,7 @@ func (s *server) flowState(ctx context.Context) (flowState, error) {
 	if err != nil {
 		return flowState{}, err
 	}
-	return flowState{latest: latest, locks: locks}, nil
+	return flowState{latest: latest, locks: locks, lang: schedule.ParseLang(r.Header.Get("Accept-Language"))}, nil
 }
 
 func (s *server) flowOut(f store.Flow, st flowState) oapi.Flow {
@@ -45,6 +50,14 @@ func (s *server) flowOut(f store.Flow, st flowState) oapi.Flow {
 		Schedule: rawOrDefault(f.Schedule, `{"kind":"manual"}`), ScheduleEnabled: f.ScheduleEnabled,
 		Timezone: f.Timezone, Targets: make([]oapi.Mirror, 0, len(f.Targets)),
 		CreatedAt: f.CreatedAt, UpdatedAt: f.UpdatedAt,
+	}
+	if sc, err := schedule.Parse(f.Schedule); err == nil {
+		out.ScheduleText = sc.Describe(st.lang, f.Timezone)
+	} else {
+		out.ScheduleText = string(f.Schedule) // stored before validation existed
+	}
+	if next, ok := scheduler.NextRun(f); ok {
+		out.NextRunAt = &next
 	}
 	for _, t := range f.Targets {
 		out.Targets = append(out.Targets, oapi.Mirror{Id: t.ID, ConnectionId: t.ConnectionID, Location: rawOrEmptyObject(t.Location)})
@@ -92,7 +105,7 @@ func (s *server) ListFlows(w http.ResponseWriter, r *http.Request) {
 		s.writeErr(w, r, err)
 		return
 	}
-	st, err := s.flowState(r.Context())
+	st, err := s.flowState(r)
 	if err != nil {
 		s.writeErr(w, r, err)
 		return
@@ -123,7 +136,7 @@ func (s *server) GetFlow(w http.ResponseWriter, r *http.Request, id oapi.Id) {
 }
 
 func (s *server) writeFlow(w http.ResponseWriter, r *http.Request, status int, f store.Flow) {
-	st, err := s.flowState(r.Context())
+	st, err := s.flowState(r)
 	if err != nil {
 		s.writeErr(w, r, err)
 		return
@@ -169,6 +182,9 @@ func (s *server) saveFlow(w http.ResponseWriter, r *http.Request, id string) {
 	if err != nil {
 		s.writeErr(w, r, err)
 		return
+	}
+	if s.b.Wake != nil {
+		s.b.Wake() // the next run may have moved
 	}
 	status := http.StatusOK
 	if id == "" {
@@ -227,12 +243,15 @@ func (s *server) validateFlow(ctx context.Context, in oapi.FlowInput, existing *
 		f.Timezone = tz
 	}
 	if in.Schedule != nil {
-		// Schedules are interpreted from M6; until then only the shape is checked.
-		var obj map[string]any
-		if err := json.Unmarshal(*in.Schedule, &obj); err != nil || obj == nil {
-			fields["schedule"] = "The schedule must be a JSON object."
-		} else {
-			f.Schedule = *in.Schedule
+		sc, err := schedule.Parse(*in.Schedule)
+		var fe schedule.FieldErrors
+		switch {
+		case errors.As(err, &fe):
+			maps.Copy(fields, fe)
+		case err != nil:
+			fields["schedule"] = "The schedule is not valid."
+		default:
+			f.Schedule = sc.JSON() // canonical, so unchanged schedules compare equal
 		}
 	}
 
@@ -408,4 +427,45 @@ func rawOrDefault(b json.RawMessage, def string) json.RawMessage {
 		return json.RawMessage(def)
 	}
 	return b
+}
+
+// previewCount is how many next run times the schedule preview shows.
+const previewCount = 5
+
+func (s *server) PreviewSchedule(w http.ResponseWriter, r *http.Request) {
+	var in oapi.SchedulePreviewRequest
+	if err := decodeJSON(r, &in); err != nil {
+		s.writeErr(w, r, err)
+		return
+	}
+	fields := map[string]string{}
+	tz := s.b.Timezone
+	if in.Timezone != nil && strings.TrimSpace(*in.Timezone) != "" {
+		tz = strings.TrimSpace(*in.Timezone)
+	}
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		fields["timezone"] = "Unknown timezone."
+	}
+	sc, err := schedule.Parse(in.Schedule)
+	var fe schedule.FieldErrors
+	if errors.As(err, &fe) {
+		maps.Copy(fields, fe)
+	} else if err != nil {
+		fields["schedule"] = "The schedule is not valid."
+	}
+	if len(fields) > 0 {
+		s.writeErr(w, r, errValidation(fields))
+		return
+	}
+	lang := schedule.ParseLang(r.Header.Get("Accept-Language"))
+	if in.Lang != nil && in.Lang.Valid() {
+		lang = schedule.Lang(*in.Lang)
+	}
+	out := oapi.SchedulePreview{Description: sc.Describe(lang, tz), Cron: sc.Cron(), Timezone: tz, Next: []time.Time{}}
+	out.Next = append(out.Next, sc.Next(time.Now(), loc, previewCount)...)
+	writeJSON(w, http.StatusOK, out)
 }

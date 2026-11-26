@@ -14,8 +14,8 @@ The original product brief is in [brief.md](brief.md).
 | 2 | Canonical model, Obsidian connector, sync engine + mapping, dry-run, `flow run` CLI, renderer pipeline (interface) | done | `develop` |
 | 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | done | `develop` |
 | 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | done | `develop` |
-| 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | **done, awaiting review** | `develop` |
-| 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | | |
+| 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | done | `develop` |
+| 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | **done, awaiting review** | `develop` |
 | 7 | Tauri desktop app with Go sidecar, installers | | |
 | 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | | |
 
@@ -23,10 +23,10 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 ### Where we left off (2026-11-26)
 
-- M4 was approved ("procedi", 2026-11-26). M5 is committed on `develop` (not pushed). Start the next session by asking for the M5 review and approval to begin M6.
-- Defaults chosen in M2–M5 that are awaiting review are listed under "Taken during M2/M3/M4/M5" below. How each wiki is mapped: [connectors.md](connectors.md).
+- M5 was approved ("procedi", 2026-11-26). M6 is committed on `develop` (not pushed). Start the next session by asking for the M6 review and approval to begin M7.
+- Defaults chosen in M2–M6 that are awaiting review are listed under "Taken during M2/M3/M4/M5/M6" below. How each wiki is mapped: [connectors.md](connectors.md).
 - M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is the first thing to do with the product owner.
-- **Next: M6.** Built-in scheduler, schedule wizard, `run-due`, run locking end to end.
+- **Next: M7.** Tauri desktop app with the Go sidecar, installers.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -82,7 +82,7 @@ Taken during M3:
 - **API rules**: a mirror cannot use the Master's connection; the kind of a saved connection cannot change; a flow cannot be edited or deleted while it runs (`409 running`); a connection used by a flow cannot be deleted (`409 in_use`, message lists the flows). Runs started from the CLI can only be stopped from the CLI (`409 not_here`); runs started in the UI can be cancelled (`POST /runs/{id}/cancel`).
 - **Manual runs work on disabled flows**: "disabled" only stops automatic schedules.
 - **Banner**: on by default for new flows; custom text per flow (max 2000 characters, `{master}` placeholder); empty = the default text, still English (the server writes it into the mirrors).
-- **Flow wizard**: the Master of a saved flow cannot be changed in the UI (its page ids and mappings belong to it); create a new flow instead. Steps: Master, what to mirror, Mirrors, options, schedule (manual only until M6), review. A disabled flow can still be run by hand.
+- **Flow wizard**: the Master of a saved flow cannot be changed in the UI (its page ids and mappings belong to it); create a new flow instead. Steps: Master, what to mirror, Mirrors, options, schedule, review. A disabled flow can still be run by hand.
 - **Run detail**: the live log keeps the last 5,000 lines in the browser (the full log stays on the server); the report hides unchanged pages by default.
 - **Server validation messages** (`fields` in 400 answers) are English only; the UI translates the error codes it knows. Follow-up below.
 - **Docker**: distroless static image, uid 65532, `/data` volume, `HEALTHCHECK` = `/tolarix healthcheck`; compose mounts `./vaults` at `/vaults` for Obsidian.
@@ -104,6 +104,17 @@ Taken during M5:
 - **Cloud as a Mirror**: with no parent and a space address, mirrors go under the **space homepage** (where Cloud puts new pages), and the archive page is `Archived – <homepage title>`. Titles are still kept unique per space, as on Data Center.
 - **Cloud API tokens**: classic tokens only; a 401 says to check the email and token and that scoped tokens are not supported. An `atlassian.net` address without `/wiki` gets it added.
 - **ADO Project wiki** is its own kind (`azure-devops-project`) on the same git reader/writer: the address is the project wiki (`…/<project>/_wiki` or `…/_wiki/wikis/<name>.wiki`); the wiki API gives the hidden `<name>.wiki` repository; branch `wikiMaster`, mapped path `/`. A project without a project wiki gets "create it in Azure DevOps (Overview → Wiki → Create project wiki)". Addresses of the wrong wiki type point to the other kind.
+
+Taken during M6:
+- **Schedule model** (`internal/schedule`): kinds `manual`, `interval`, `daily`, `weekly`, `monthly`, `cron`; each kind keeps only its own fields (the API stores the canonical JSON). Intervals are limited to steps that divide the hour or the day (5/10/15/20/30 minutes, 1/2/3/4/6/8/12 hours) so they map to plain cron (`*/N`) and line up with the clock. Advanced cron: 5 fields or `@yearly/@monthly/@weekly/@daily/@hourly`; no seconds, no `TZ=`/`CRON_TZ=` prefix (the flow's timezone field is the only timezone), no `@every`, and expressions that never fire (e.g. 30 February) are rejected. Monthly on day 29–31 skips shorter months, and the sentence says so.
+- **Sentence and preview are server-side**: `POST /api/v1/schedules/preview` returns the sentence (en/it), the cron expression and the next 5 runs. The language comes from `lang` in the body or `Accept-Language`, which the web client sends from the UI language; flows carry `scheduleText` the same way and are refetched when the language changes. The sentence ends with the timezone (except for manual).
+- **When a flow is due**: the next run is the first schedule time after the flow's *anchor* (`flows.schedule_anchor`, migration `00004`; the creation time at first). Whoever starts a due flow first moves the anchor to *now* with one conditional UPDATE (`ClaimSchedule`), so the server and any number of `run-due` processes never start the same slot twice. Saving a flow resets the anchor when the schedule, timezone, enabled or built-in switch change, so a new schedule never fires for times before it existed.
+- **Missed schedules run once, no backfill**: on startup (or after a pause) all missed slots of a flow collapse into one run, because the anchor moves to the claim time. A slot skipped because the flow is already running (lock held) is consumed, not retried.
+- **Built-in scheduler** (`internal/scheduler`, started by `serve`): checks every 20 s, at startup, after a flow is saved and after a run ends. Global cap of 2 runs at once, counting every background run of the server (manual ones included); manual runs are never blocked by the cap. Due flows wait for a free slot oldest first. It stops before running runs are shut down.
+- **`enabled` vs built-in switch**: a disabled flow never runs by itself. `scheduleEnabled` false (UI: "Run with the built-in scheduler" off) means the server skips the flow and only `tolarix run-due` runs it, at the same times; `nextRunAt` is still shown.
+- **`tolarix run-due`**: runs every due flow once, one after the other, and exits; `--json` prints the run results. Exit codes as `flow run` (0 also when nothing is due; 4 if a flow was locked, and that slot is consumed). It ignores the cap (it is its own process) but respects the per-flow DB lock.
+- **Wizard**: Simple tab (radio list with inline fields; the weekday toggles default to Monday–Friday, time 07:30) and Advanced tab (cron; it starts from the cron of the simple form). The timezone field defaults to the instance timezone and suggests IANA names. The preview (sentence, cron, next 5 runs in the flow's timezone) updates live, debounced by 300 ms, and shows the server's field errors.
+- **YAML import**: flows take `schedule` (same JSON shape), `timezone` (kept on re-import when omitted) and `builtInSchedule`.
 
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
@@ -138,4 +149,6 @@ Taken during M5:
 - Playwright has no axe checks yet (M8 a11y pass).
 - **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; still open after M5.
 - Run event attributes are stored as strings (`fmt.Sprint`); the UI shows them as `key=value`, which is enough for now.
-- `runner.Runner` has no global concurrency cap yet (the built-in scheduler in M6 adds the cap of 2).
+- **M6 follow-ups**:
+  - The cap of 2 lives in the built-in scheduler: `run-due` processes and CLI `flow run` are not counted (only the per-flow lock applies across processes).
+  - Schedule sentences and validation messages for the advanced cron field are server-side English/Italian; cron parse errors are English only.

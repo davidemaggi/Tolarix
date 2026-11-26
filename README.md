@@ -94,7 +94,7 @@ new wiki means writing one connector; the sync engine doesn't change.
 - [x] **M3 · Web app + Docker.** Admin login, guided wizards, dashboard, live run logs
 - [x] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
 - [x] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
-- [ ] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
+- [x] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
 - [ ] **M7 · Desktop app.** Installers for Windows, macOS and Linux
 - [ ] **M8 · v1.0.** Docs, hardening, accessibility pass, release
 

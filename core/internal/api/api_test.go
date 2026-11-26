@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -68,6 +69,7 @@ type env struct {
 	bg      *runner.Background
 	dir     string
 	limiter *auth.Limiter
+	woken   *atomic.Int32 // calls of Backend.Wake
 }
 
 func newEnv(t *testing.T, mode Mode) *env {
@@ -95,14 +97,14 @@ func newEnv(t *testing.T, mode Mode) *env {
 		_ = st.Close()
 	})
 	lim := auth.NewLimiter(3, time.Minute)
-	h := NewHandler(Config{
-		Mode: mode, DesktopToken: "desk", DB: st, UI: testUI, Logger: quiet,
-		API: &Backend{
-			Store: st, Cipher: ci, Auth: as, Runner: rn, Background: bg, Hub: hub,
-			Timezone: "Europe/Rome", Limiter: lim, PollInterval: 20 * time.Millisecond,
-		},
-	})
-	return &env{t: t, h: h, st: st, auth: as, bg: bg, dir: dir, limiter: lim}
+	be := &Backend{
+		Store: st, Cipher: ci, Auth: as, Runner: rn, Background: bg, Hub: hub,
+		Timezone: "Europe/Rome", Limiter: lim, PollInterval: 20 * time.Millisecond,
+	}
+	woken := &atomic.Int32{}
+	be.Wake = func() { woken.Add(1) }
+	h := NewHandler(Config{Mode: mode, DesktopToken: "desk", DB: st, UI: testUI, Logger: quiet, API: be})
+	return &env{t: t, h: h, st: st, auth: as, bg: bg, dir: dir, limiter: lim, woken: woken}
 }
 
 // client keeps the session cookie and CSRF token like the web UI does.
@@ -750,4 +752,82 @@ func (c *client) stream(runID, lastEventID string) (logs []map[string]any, end m
 	}
 	t.Fatalf("stream ended without an end event (%v)", sc.Err())
 	return nil, nil
+}
+
+func TestSchedules(t *testing.T) {
+	e := newEnv(t, ModeWeb)
+	c := e.signIn()
+	master, mirror := e.vaults()
+	woken := e.woken
+
+	// Preview: sentence, cron and the next 5 times, in the requested language.
+	r := c.do("POST", "/schedules/preview", map[string]any{
+		"schedule": map[string]any{"kind": "weekly", "days": []string{"fri", "mon", "tue", "wed", "thu"}, "time": "7:30"}, "lang": "it",
+	})
+	var p struct {
+		Description, Cron, Timezone string
+		Next                        []time.Time
+	}
+	r.json(t, &p)
+	rome, _ := time.LoadLocation("Europe/Rome")
+	if r.code != 200 || p.Description != "Ogni giorno feriale alle 07:30, Europe/Rome" || p.Cron != "30 7 * * 1-5" ||
+		p.Timezone != "Europe/Rome" || len(p.Next) != 5 || p.Next[0].In(rome).Format("15:04") != "07:30" || !p.Next[0].After(time.Now()) {
+		t.Fatalf("preview: %d %s", r.code, r.body)
+	}
+	c.header.Set("Accept-Language", "en-GB,en;q=0.9")
+	r = c.do("POST", "/schedules/preview", map[string]any{"schedule": map[string]any{"kind": "manual"}, "timezone": "UTC"})
+	r.json(t, &p)
+	if r.code != 200 || p.Description != "Only when run manually" || p.Cron != "" || len(p.Next) != 0 {
+		t.Fatalf("manual preview: %d %s", r.code, r.body)
+	}
+	r = c.do("POST", "/schedules/preview", map[string]any{"schedule": map[string]any{"kind": "cron", "expr": "0 0 7 * * 1"}, "timezone": "Mars/Base"})
+	if f := r.fields(t); r.code != 400 || f["schedule.expr"] == "" || f["timezone"] == "" {
+		t.Fatalf("bad preview: %d %s", r.code, r.body)
+	}
+
+	// Flows: the schedule is validated, stored in canonical form and explained.
+	mk := func(name, path string) string {
+		var out struct{ ID string }
+		c.do("POST", "/connections", map[string]any{"name": name, "kind": "obsidian", "config": map[string]any{"path": path}}).json(t, &out)
+		return out.ID
+	}
+	src, dst := mk("Notes", master), mk("Team", mirror)
+	in := map[string]any{
+		"name": "Scheduled", "sourceConnectionId": src, "scope": map[string]any{"mode": "all"}, "options": map[string]any{},
+		"schedule": map[string]any{"kind": "daily", "time": "25:00"},
+		"targets":  []map[string]any{{"connectionId": dst, "location": map[string]any{"folder": "M"}}},
+	}
+	if r := c.do("POST", "/flows", in); r.code != 400 || r.fields(t)["schedule.time"] == "" {
+		t.Fatalf("bad schedule: %d %s", r.code, r.body)
+	}
+	in["schedule"] = map[string]any{"kind": "daily", "time": "6:05", "days": []string{"mon"}}
+	r = c.do("POST", "/flows", in)
+	var f struct {
+		ID           string
+		Schedule     map[string]any
+		ScheduleText string
+		NextRunAt    *time.Time
+	}
+	r.json(t, &f)
+	if r.code != 201 || f.Schedule["time"] != "06:05" || f.Schedule["days"] != nil || f.ScheduleText != "Every day at 06:05, Europe/Rome" ||
+		f.NextRunAt == nil || f.NextRunAt.In(rome).Format("15:04") != "06:05" || woken.Load() != 1 {
+		t.Fatalf("scheduled flow: %d %s (woken %d)", r.code, r.body, woken.Load())
+	}
+
+	// Disabled or manual: no next run.
+	in["enabled"] = false
+	r = c.do("PUT", "/flows/"+f.ID, in)
+	f.NextRunAt = nil
+	r.json(t, &f)
+	if r.code != 200 || f.NextRunAt != nil {
+		t.Fatalf("disabled flow: %s", r.body)
+	}
+	in["enabled"], in["schedule"] = true, map[string]any{"kind": "manual"}
+	c.header.Set("Accept-Language", "it")
+	r = c.do("PUT", "/flows/"+f.ID, in)
+	f.NextRunAt = nil
+	r.json(t, &f)
+	if r.code != 200 || f.NextRunAt != nil || f.ScheduleText != "Solo quando lo avvii manualmente" {
+		t.Fatalf("manual flow: %s", r.body)
+	}
 }

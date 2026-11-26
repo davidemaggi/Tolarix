@@ -25,6 +25,18 @@ type Flow struct {
 	Targets            []FlowTarget    `json:"targets"`
 	CreatedAt          time.Time       `json:"createdAt"`
 	UpdatedAt          time.Time       `json:"updatedAt"`
+
+	// ScheduleAnchor is the stored anchor, compared as is by ClaimSchedule.
+	// Use Anchor for its time. Set by the store only.
+	ScheduleAnchor string `json:"-"`
+}
+
+// Anchor is the time from which the next scheduled run is counted.
+func (f Flow) Anchor() time.Time {
+	if t := parseTime(f.ScheduleAnchor); !t.IsZero() {
+		return t
+	}
+	return f.UpdatedAt
 }
 
 // FlowTarget is one mirror of a flow.
@@ -35,13 +47,13 @@ type FlowTarget struct {
 	Position     int             `json:"position"`
 }
 
-const flowCols = `id, name, enabled, source_connection_id, scope, options, schedule, schedule_enabled, timezone, created_at, updated_at`
+const flowCols = `id, name, enabled, source_connection_id, scope, options, schedule, schedule_enabled, timezone, created_at, updated_at, schedule_anchor`
 
 func scanFlow(row interface{ Scan(...any) error }) (Flow, error) {
 	var f Flow
 	var scope, opts, sched, created, updated string
 	if err := row.Scan(&f.ID, &f.Name, &f.Enabled, &f.SourceConnectionID, &scope, &opts, &sched,
-		&f.ScheduleEnabled, &f.Timezone, &created, &updated); err != nil {
+		&f.ScheduleEnabled, &f.Timezone, &created, &updated, &f.ScheduleAnchor); err != nil {
 		return f, err
 	}
 	if err := json.Unmarshal([]byte(scope), &f.Scope); err != nil {
@@ -74,17 +86,24 @@ func (s *Store) SaveFlow(ctx context.Context, f Flow) (Flow, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	ts := now()
+	sched := rawOr(f.Schedule, `{"kind":"manual"}`)
 	insert := f.ID == ""
 	if insert {
 		f.ID = newID()
-		_, err = tx.ExecContext(ctx, `INSERT INTO flows (`+flowCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		_, err = tx.ExecContext(ctx, `INSERT INTO flows (`+flowCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			f.ID, f.Name, boolInt(f.Enabled), f.SourceConnectionID, mustJSON(f.Scope), mustJSON(f.Options),
-			rawOr(f.Schedule, `{"kind":"manual"}`), boolInt(f.ScheduleEnabled), f.Timezone, ts, ts)
+			sched, boolInt(f.ScheduleEnabled), f.Timezone, ts, ts, ts)
 	} else {
+		// A changed schedule, timezone or switch restarts the count from now,
+		// so turning a schedule on never fires at once for times in the past.
+		// The CASE reads the old column values.
 		_, err = tx.ExecContext(ctx, `UPDATE flows SET name = ?, enabled = ?, source_connection_id = ?, scope = ?, options = ?,
+			schedule_anchor = CASE WHEN schedule_anchor = '' OR schedule <> ? OR timezone <> ? OR enabled <> ? OR schedule_enabled <> ?
+				THEN ? ELSE schedule_anchor END,
 			schedule = ?, schedule_enabled = ?, timezone = ?, updated_at = ? WHERE id = ?`,
 			f.Name, boolInt(f.Enabled), f.SourceConnectionID, mustJSON(f.Scope), mustJSON(f.Options),
-			rawOr(f.Schedule, `{"kind":"manual"}`), boolInt(f.ScheduleEnabled), f.Timezone, ts, f.ID)
+			sched, f.Timezone, boolInt(f.Enabled), boolInt(f.ScheduleEnabled), ts,
+			sched, boolInt(f.ScheduleEnabled), f.Timezone, ts, f.ID)
 	}
 	if isUniqueViolation(err) {
 		return f, fmt.Errorf("a flow named %q %w", f.Name, ErrConflict)
@@ -229,4 +248,20 @@ func (s *Store) DeleteFlow(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ClaimSchedule records that the scheduled run of a flow due since the anchor
+// prev is being started, by moving the anchor to at. It returns false when
+// another process (the server or "tolarix run-due") claimed it first, or the
+// flow changed meanwhile. Moving the anchor to the claim time, not to the
+// missed schedule time, is what makes missed runs happen once, without
+// backfill.
+func (s *Store) ClaimSchedule(ctx context.Context, flowID, prev string, at time.Time) (bool, error) {
+	res, err := s.DB.ExecContext(ctx, `UPDATE flows SET schedule_anchor = ? WHERE id = ? AND schedule_anchor = ?`,
+		at.UTC().Format(timeLayout), flowID, prev)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n == 1, nil
 }

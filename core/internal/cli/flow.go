@@ -8,11 +8,14 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/davidemaggi/tolarix/core/internal/engine"
 	"github.com/davidemaggi/tolarix/core/internal/runner"
+	"github.com/davidemaggi/tolarix/core/internal/schedule"
+	"github.com/davidemaggi/tolarix/core/internal/scheduler"
 	"github.com/davidemaggi/tolarix/core/internal/store"
 )
 
@@ -28,9 +31,11 @@ func newFlowCommand(a *app) *cobra.Command {
 
 type flowView struct {
 	store.Flow
-	Master  string     `json:"master"`
-	Mirrors []string   `json:"mirrors"`
-	LastRun *store.Run `json:"lastRun,omitempty"`
+	Master       string     `json:"master"`
+	Mirrors      []string   `json:"mirrors"`
+	LastRun      *store.Run `json:"lastRun,omitempty"`
+	ScheduleText string     `json:"scheduleText"`
+	NextRunAt    *time.Time `json:"nextRunAt,omitempty"`
 }
 
 func newFlowListCommand(a *app) *cobra.Command {
@@ -64,6 +69,15 @@ func newFlowListCommand(a *app) *cobra.Command {
 				if runs, _ := rt.store.ListRuns(ctx, f.ID, 1); len(runs) == 1 {
 					v.LastRun = &runs[0]
 				}
+				if sc, err := schedule.Parse(f.Schedule); err == nil {
+					v.ScheduleText = sc.Describe(schedule.English, f.Timezone)
+					if !sc.IsManual() && !f.ScheduleEnabled {
+						v.ScheduleText += " (run-due only)"
+					}
+				}
+				if next, ok := scheduler.NextRun(f); ok {
+					v.NextRunAt = &next
+				}
 				views = append(views, v)
 			}
 			if asJSON {
@@ -74,9 +88,12 @@ func newFlowListCommand(a *app) *cobra.Command {
 				return nil
 			}
 			tw := table(a.stdout)
-			fmt.Fprintln(tw, "NAME\tENABLED\tMASTER\tMIRRORS\tLAST RUN\tSTATUS\tID")
+			fmt.Fprintln(tw, "NAME\tENABLED\tMASTER\tMIRRORS\tSCHEDULE\tNEXT RUN\tLAST RUN\tSTATUS\tID")
 			for _, v := range views {
-				last, status := "never", "-"
+				last, status, next := "never", "-", "-"
+				if v.NextRunAt != nil {
+					next = v.NextRunAt.Local().Format("2006-01-02 15:04")
+				}
 				if v.LastRun != nil {
 					last = v.LastRun.StartedAt.Local().Format("2006-01-02 15:04")
 					status = v.LastRun.Status
@@ -84,8 +101,8 @@ func newFlowListCommand(a *app) *cobra.Command {
 						status += " (dry-run)"
 					}
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.Name, yesNo(v.Enabled), v.Master,
-					strings.Join(v.Mirrors, ", "), last, status, shortID(v.ID))
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", v.Name, yesNo(v.Enabled), v.Master,
+					strings.Join(v.Mirrors, ", "), v.ScheduleText, next, last, status, shortID(v.ID))
 			}
 			return tw.Flush()
 		},

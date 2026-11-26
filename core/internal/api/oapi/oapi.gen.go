@@ -191,6 +191,24 @@ func (e RunTrigger) Valid() bool {
 	}
 }
 
+// Defines values for SchedulePreviewRequestLang.
+const (
+	SchedulePreviewRequestLangEn SchedulePreviewRequestLang = "en"
+	SchedulePreviewRequestLangIt SchedulePreviewRequestLang = "it"
+)
+
+// Valid indicates whether the value is a known member of the SchedulePreviewRequestLang enum.
+func (e SchedulePreviewRequestLang) Valid() bool {
+	switch e {
+	case SchedulePreviewRequestLangEn:
+		return true
+	case SchedulePreviewRequestLangIt:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScopeMode.
 const (
 	ScopeModeAll      ScopeMode = "all"
@@ -356,14 +374,24 @@ type Flow struct {
 	LastRun   *Run      `json:"lastRun,omitempty"`
 	Name      string    `json:"name"`
 
-	// NextRunAt Next scheduled run (empty until the built-in scheduler ships)
+	// NextRunAt When the flow runs by itself next; absent for a disabled flow or a
+	// manual schedule. With scheduleEnabled false the built-in scheduler
+	// skips the flow and only "tolarix run-due" runs it at this time.
 	NextRunAt *time.Time   `json:"nextRunAt,omitempty"`
 	Options   FlowOptions  `json:"options"`
 	Running   *RunningInfo `json:"running,omitempty"`
 
-	// Schedule When the flow runs by itself. Only "manual" until the built-in scheduler ships.
-	Schedule           Schedule  `json:"schedule"`
-	ScheduleEnabled    bool      `json:"scheduleEnabled"`
+	// Schedule When the flow runs by itself. Each kind uses only its own fields:
+	// manual (none); interval (every, unit: every 5/10/15/20/30 minutes or
+	// 1/2/3/4/6/8/12 hours); daily (time); weekly (days, time); monthly
+	// (day, time; months without that day are skipped); cron (expr: 5 fields
+	// or a descriptor such as @daily, no seconds, no timezone prefix).
+	// Times are in the flow's timezone.
+	Schedule        Schedule `json:"schedule"`
+	ScheduleEnabled bool     `json:"scheduleEnabled"`
+
+	// ScheduleText The schedule as a sentence, in the language of Accept-Language
+	ScheduleText       string    `json:"scheduleText"`
 	Scope              Scope     `json:"scope"`
 	SourceConnectionId string    `json:"sourceConnectionId"`
 	Targets            []Mirror  `json:"targets"`
@@ -377,8 +405,15 @@ type FlowInput struct {
 	Name    string      `json:"name"`
 	Options FlowOptions `json:"options"`
 
-	// Schedule When the flow runs by itself. Only "manual" until the built-in scheduler ships.
-	Schedule           *Schedule    `json:"schedule,omitempty"`
+	// Schedule When the flow runs by itself. Each kind uses only its own fields:
+	// manual (none); interval (every, unit: every 5/10/15/20/30 minutes or
+	// 1/2/3/4/6/8/12 hours); daily (time); weekly (days, time); monthly
+	// (day, time; months without that day are skipped); cron (expr: 5 fields
+	// or a descriptor such as @daily, no seconds, no timezone prefix).
+	// Times are in the flow's timezone.
+	Schedule *Schedule `json:"schedule,omitempty"`
+
+	// ScheduleEnabled Run with the built-in scheduler; off leaves it to "tolarix run-due" (cron)
 	ScheduleEnabled    *bool        `json:"scheduleEnabled,omitempty"`
 	Scope              Scope        `json:"scope"`
 	SourceConnectionId string       `json:"sourceConnectionId"`
@@ -529,8 +564,46 @@ type RunningInfo struct {
 	StartedAt time.Time `json:"startedAt"`
 }
 
-// Schedule When the flow runs by itself. Only "manual" until the built-in scheduler ships.
+// Schedule When the flow runs by itself. Each kind uses only its own fields:
+// manual (none); interval (every, unit: every 5/10/15/20/30 minutes or
+// 1/2/3/4/6/8/12 hours); daily (time); weekly (days, time); monthly
+// (day, time; months without that day are skipped); cron (expr: 5 fields
+// or a descriptor such as @daily, no seconds, no timezone prefix).
+// Times are in the flow's timezone.
 type Schedule = json.RawMessage
+
+// SchedulePreview defines model for SchedulePreview.
+type SchedulePreview struct {
+	// Cron The cron expression; empty for a manual schedule
+	Cron string `json:"cron"`
+
+	// Description Example: Every weekday at 07:30, Europe/Rome
+	Description string `json:"description"`
+
+	// Next The next 5 run times (empty for a manual schedule)
+	Next     []time.Time `json:"next"`
+	Timezone string      `json:"timezone"`
+}
+
+// SchedulePreviewRequest defines model for SchedulePreviewRequest.
+type SchedulePreviewRequest struct {
+	// Lang Language of the sentence (default from Accept-Language)
+	Lang *SchedulePreviewRequestLang `json:"lang,omitempty"`
+
+	// Schedule When the flow runs by itself. Each kind uses only its own fields:
+	// manual (none); interval (every, unit: every 5/10/15/20/30 minutes or
+	// 1/2/3/4/6/8/12 hours); daily (time); weekly (days, time); monthly
+	// (day, time; months without that day are skipped); cron (expr: 5 fields
+	// or a descriptor such as @daily, no seconds, no timezone prefix).
+	// Times are in the flow's timezone.
+	Schedule Schedule `json:"schedule"`
+
+	// Timezone IANA timezone (default the server timezone)
+	Timezone *string `json:"timezone,omitempty"`
+}
+
+// SchedulePreviewRequestLang Language of the sentence (default from Accept-Language)
+type SchedulePreviewRequestLang string
 
 // Scope defines model for Scope.
 type Scope struct {
@@ -644,6 +717,9 @@ type UpdateFlowJSONRequestBody = FlowInput
 // StartRunJSONRequestBody defines body for StartRun for application/json ContentType.
 type StartRunJSONRequestBody = StartRunRequest
 
+// PreviewScheduleJSONRequestBody defines body for PreviewSchedule for application/json ContentType.
+type PreviewScheduleJSONRequestBody = SchedulePreviewRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Login Sign in as admin
@@ -715,6 +791,9 @@ type ServerInterface interface {
 	// StreamRun Live log (Server-Sent Events)
 	// (GET /runs/{id}/stream)
 	StreamRun(w http.ResponseWriter, r *http.Request, id Id)
+	// PreviewSchedule Explain a schedule before saving it
+	// (POST /schedules/preview)
+	PreviewSchedule(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -842,6 +921,12 @@ func (_ Unimplemented) ListRunEvents(w http.ResponseWriter, r *http.Request, id 
 // StreamRun Live log (Server-Sent Events)
 // (GET /runs/{id}/stream)
 func (_ Unimplemented) StreamRun(w http.ResponseWriter, r *http.Request, id Id) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PreviewSchedule Explain a schedule before saving it
+// (POST /schedules/preview)
+func (_ Unimplemented) PreviewSchedule(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1436,6 +1521,20 @@ func (siw *ServerInterfaceWrapper) StreamRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewSchedule operation middleware
+func (siw *ServerInterfaceWrapper) PreviewSchedule(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewSchedule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1573,6 +1672,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/connections/test", wrapper.TestConnection)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/schedules/preview", wrapper.PreviewSchedule)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/connections/{id}", wrapper.DeleteConnection)
