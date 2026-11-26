@@ -35,6 +35,7 @@ type fakeADO struct {
 	blobs         map[string][]byte
 	wikis         map[string]wikiInfo
 	pushes        [][]pushChange
+	refsCreated   []string // branches created through the refs API
 	nextCommit    int
 	rejectPush    string // error message returned by the next push
 	beforePush    func() // runs (unlocked) before a push is applied
@@ -199,6 +200,8 @@ func (f *fakeADO) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		f.mu.Unlock()
 		writeJSON(w, list[gitRef]{Count: len(refs), Value: refs})
+	case seg[3] == "refs" && r.Method == http.MethodPost:
+		f.updateRefs(w, r)
 	case seg[3] == "items":
 		f.items(w, q)
 	case seg[3] == "blobs" && len(seg) == 5:
@@ -270,6 +273,38 @@ func (f *fakeADO) items(w http.ResponseWriter, q url.Values) {
 	out = append([]gitItem{{Path: root, GitObjectType: "tree", IsFolder: true}}, out...)
 	sort.Slice(out[1:], func(i, j int) bool { return out[i+1].Path < out[j+1].Path })
 	writeJSON(w, list[gitItem]{Count: len(out), Value: out})
+}
+
+// updateRefs creates branches (the only ref update Tolarix makes).
+func (f *fakeADO) updateRefs(w http.ResponseWriter, r *http.Request) {
+	var body []struct {
+		Name        string `json:"name"`
+		OldObjectID string `json:"oldObjectId"`
+		NewObjectID string `json:"newObjectId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body) != 1 {
+		adoError(w, http.StatusBadRequest, fmt.Sprintf("bad refs body: %v", err))
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := body[0]
+	branch := strings.TrimPrefix(u.Name, "refs/heads/")
+	res := map[string]any{"name": u.Name, "newObjectId": u.NewObjectID, "success": true, "updateStatus": "succeeded"}
+	_, exists := f.branches[branch]
+	_, known := f.commits[u.NewObjectID]
+	switch {
+	case u.OldObjectID != zeroID:
+		f.t.Errorf("fake ado: only branch creation is expected, got %+v", u)
+	case exists:
+		res["success"], res["updateStatus"] = false, "staleOldObjectId"
+	case !known:
+		res["success"], res["updateStatus"] = false, "invalidRefName"
+	default:
+		f.branches[branch] = u.NewObjectID
+		f.refsCreated = append(f.refsCreated, branch)
+	}
+	writeJSON(w, map[string]any{"count": 1, "value": []any{res}})
 }
 
 func (f *fakeADO) push(w http.ResponseWriter, r *http.Request) {

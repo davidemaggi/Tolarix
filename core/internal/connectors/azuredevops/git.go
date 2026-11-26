@@ -106,7 +106,7 @@ type pushContent struct {
 
 // push commits changes on top of old ("" = create the branch) and returns
 // the new head. Runs bigger than maxPushBytes are split into several pushes.
-func (r *Repo) push(ctx context.Context, old, message string, changes []change) (string, error) {
+func (r *Repo) push(ctx context.Context, branch, old, message string, changes []change) (string, error) {
 	if old == "" {
 		old = zeroID
 	}
@@ -116,7 +116,7 @@ func (r *Repo) push(ctx context.Context, old, message string, changes []change) 
 		if len(batches) > 1 {
 			msg += fmt.Sprintf(" (part %d of %d)", i+1, len(batches))
 		}
-		head, err := r.pushOnce(ctx, old, msg, b)
+		head, err := r.pushOnce(ctx, branch, old, msg, b)
 		if err != nil {
 			if i > 0 {
 				return "", fmt.Errorf("part %d of %d: %w (the earlier parts were pushed)", i+1, len(batches), err)
@@ -148,7 +148,7 @@ func splitChanges(changes []change, limit int64) [][]change {
 	return out
 }
 
-func (r *Repo) pushOnce(ctx context.Context, old, message string, changes []change) (string, error) {
+func (r *Repo) pushOnce(ctx context.Context, branch, old, message string, changes []change) (string, error) {
 	pcs := make([]pushChange, 0, len(changes))
 	for _, c := range changes {
 		pc := pushChange{ChangeType: c.Type, SourceServerItem: c.From}
@@ -163,7 +163,7 @@ func (r *Repo) pushOnce(ctx context.Context, old, message string, changes []chan
 		pcs = append(pcs, pc)
 	}
 	body, err := json.Marshal(map[string]any{
-		"refUpdates": []map[string]string{{"name": "refs/heads/" + r.addr.Branch, "oldObjectId": old}},
+		"refUpdates": []map[string]string{{"name": "refs/heads/" + branch, "oldObjectId": old}},
 		"commits":    []map[string]any{{"comment": message, "changes": pcs}},
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func (r *Repo) pushOnce(ctx context.Context, old, message string, changes []chan
 		} `json:"refUpdates"`
 	}
 	if err := r.client.JSON(ctx, http.MethodPost, r.git("/pushes", nil), json.RawMessage(body), &res); err != nil {
-		return "", r.pushError(err)
+		return "", r.pushError(err, branch)
 	}
 	if len(res.RefUpdates) == 0 || res.RefUpdates[0].NewObjectID == "" {
 		return "", errors.New("the push was accepted by Azure DevOps, but it did not report the new commit")
@@ -184,7 +184,7 @@ func (r *Repo) pushOnce(ctx context.Context, old, message string, changes []chan
 	return res.RefUpdates[0].NewObjectID, nil
 }
 
-func (r *Repo) pushError(err error) error {
+func (r *Repo) pushError(err error, branch string) error {
 	var he *httpc.Error
 	msg := err.Error()
 	if errors.As(err, &he) {
@@ -192,11 +192,11 @@ func (r *Repo) pushError(err error) error {
 	}
 	switch {
 	case strings.Contains(msg, "TF402455") || strings.Contains(msg, "TF402457"):
-		return fmt.Errorf("the branch %s is protected by branch policies (pull requests required), so Tolarix cannot push to it. Use a branch without required reviews for the wiki: %s", r.addr.Branch, msg)
+		return fmt.Errorf("the branch %s is protected by branch policies (pull requests required), so Tolarix cannot push to it. Set another branch on this Mirror (it is created if missing) and merge it with a pull request, or use a branch without required reviews: %s", branch, msg)
 	case strings.Contains(msg, "TF401028") || httpc.StatusOf(err) == http.StatusConflict:
-		return fmt.Errorf("the branch %s changed while Tolarix was writing (someone pushed at the same time); nothing was written, run the flow again", r.addr.Branch)
+		return fmt.Errorf("the branch %s changed while Tolarix was writing (someone pushed at the same time); nothing was written, run the flow again", branch)
 	case httpc.StatusOf(err) == http.StatusForbidden:
-		return fmt.Errorf("the token cannot push to %s: give it the Code (Read & write) scope and the Contribute permission on the repository", r.addr.Branch)
+		return fmt.Errorf("the token cannot push to %s: give it the Code (Read & write) scope and the Contribute permission on the repository", branch)
 	}
-	return r.friendly(err, "the branch "+r.addr.Branch)
+	return r.friendly(err, "the branch "+branch)
 }

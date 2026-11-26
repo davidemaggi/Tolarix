@@ -147,6 +147,7 @@ Taken during M9:
 - **GitHub wiki layout**: names unique across the export (GitHub addresses pages by name only), spaces → `-`, `\ / : * ? " < > | # %` dropped, duplicates `Name-(2)`; children in a folder of the same name; links by bare name; attachments in `_attachments/`; `_Sidebar.md` generated with a marker first line, never replacing a sidebar without it; sized images become `<img width=…>`.
 - **Markdown layout**: `Name.md`, or `Name/index.md` for pages with children (a leaf gaining children is a move); names keep spaces, forbidden characters replaced; relative links with `.md` and GitHub-style heading slugs; attachments in `assets/`; `title` added to the front matter when missing.
 - **ADO names**: Windows device names (`CON`, `Aux`…) now get their first letter percent-encoded (`%41ux`), so exports open on Windows; the reader decodes it as before. `filetree.WindowsReserved` is shared with Obsidian.
+- **Code wiki target branch** (product owner, 2026-11-26): an optional location field `branch` on `azure-devops-code` targets (not on project wikis, which only show `wikiMaster`). Per target rather than per connection, so one connection can feed several branches; the Master's branch still comes from the address (`version=GB…`). A missing branch is created automatically from the connection's branch (wiki version / default branch) through the refs API, only in `Apply`, so dry-runs and no-change runs create nothing. Branch names are validated with git's ref rules.
 - **`scripts/build-core.mjs`** looks for Go in the usual install folders when it is not on PATH and explains how to install it otherwise (Windows report, `spawnSync go ENOENT`).
 
 ### Technical choices
@@ -201,3 +202,4 @@ Taken during M9:
   - The generated `_Sidebar.md` lists the pages placed in the export; pages skipped because of an error in a run still appear in it.
   - Markdown exports have no page order (sorted by name); a `nav`/`_category_.json` for MkDocs or Docusaurus could carry the Master order later.
   - The folder must exist on the machine running Tolarix; there is no "pick a folder" dialog in the desktop app yet.
+  - Code wiki branch: creating the branch through the refs API is checked against the fake only; verify on a real organisation (the token needs Create branch). A run with nothing to write does not create the branch. The wiki does not show the branch until it is published as a wiki version.

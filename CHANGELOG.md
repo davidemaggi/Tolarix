@@ -30,7 +30,8 @@ First public release.
 - Optional notice ("This page is mirrored from …") on every mirrored page.
 - draw.io diagrams kept as `.drawio` attachments and shown as PNG (preview, export
   server or draw.io Desktop).
-- Azure DevOps mirrors are written as one Git commit per run.
+- Azure DevOps mirrors are written as one Git commit per run. Code wiki mirrors can
+  push to another branch, created from the wiki's branch when it does not exist.
 - Local folder exports (Mirror only): write a Mirror to a folder on disk in the
   Azure DevOps wiki layout, the GitHub wiki layout (with a generated `_Sidebar.md`)
   or plain Markdown with relative links, ready to commit or publish.

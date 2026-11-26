@@ -347,12 +347,13 @@ func writeFile(t *testing.T, root, rel, content string) {
 }
 
 type harness struct {
-	t     *testing.T
-	f     *fakeADO
-	vault string
-	src   *obsidian.Vault
-	repo  *Repo
-	store *enginetest.MemStore
+	t        *testing.T
+	f        *fakeADO
+	vault    string
+	src      *obsidian.Vault
+	repo     *Repo
+	store    *enginetest.MemStore
+	location string // flow target location JSON (default: folder Mirror)
 }
 
 func newHarness(t *testing.T, f *fakeADO) *harness {
@@ -371,7 +372,11 @@ func newHarness(t *testing.T, f *fakeADO) *harness {
 func (h *harness) runRaw(opts engine.Options) *engine.TargetReport {
 	h.t.Helper()
 	ctx := context.Background()
-	s, err := h.repo.Open(ctx, json.RawMessage(`{"folder":"Mirror"}`))
+	loc := h.location
+	if loc == "" {
+		loc = `{"folder":"Mirror"}`
+	}
+	s, err := h.repo.Open(ctx, json.RawMessage(loc))
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -606,5 +611,92 @@ func TestMirrorSplitsLargePushes(t *testing.T) {
 	tr := h.run(engine.Options{})
 	if got := kinds(tr); strings.Contains(got, "create") || strings.Contains(got, "update") {
 		t.Fatalf("rerun ops = %s", got)
+	}
+}
+
+func TestMirrorToAnotherBranch(t *testing.T) {
+	f := newFake(t)
+	seedWiki(f)
+	h := newHarness(t, f)
+	h.location = `{"folder":"Mirror","branch":"wiki/mirror"}`
+	base := f.branches["main"]
+
+	// A dry-run creates nothing.
+	s, err := h.repo.Open(context.Background(), json.RawMessage(h.location))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&engine.Engine{Mappings: h.store}).Run(context.Background(), engine.Request{Source: h.src, DryRun: true,
+		Targets: []engine.Target{{ID: "t1", Name: "ADO", Session: s}}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.refsCreated) != 0 || len(f.takePushes()) != 0 {
+		t.Fatalf("dry-run wrote: %v", f.refsCreated)
+	}
+
+	// The first run creates the branch from main, then pushes on top of it.
+	h.run(engine.Options{})
+	if strings.Join(f.refsCreated, ",") != "wiki/mirror" {
+		t.Fatalf("refs created = %v", f.refsCreated)
+	}
+	if f.file("wiki/mirror", "/wiki/Mirror/Guide.md") == "" || f.file("wiki/mirror", "/wiki/Home.md") == "" {
+		t.Fatalf("branch content: %v", f.paths("wiki/mirror", "/"))
+	}
+	if f.branches["main"] != base || f.file("main", "/wiki/Mirror/Guide.md") != "" {
+		t.Fatal("main was changed")
+	}
+
+	// Later runs push to the existing branch.
+	writeFile(t, h.vault, "Other/Notes.md", "Changed.\n")
+	h.run(engine.Options{})
+	if len(f.refsCreated) != 1 || f.file("wiki/mirror", "/wiki/Mirror/Other/Notes.md") != "Changed.\n" {
+		t.Fatalf("second run: refs %v, notes %q", f.refsCreated, f.file("wiki/mirror", "/wiki/Mirror/Other/Notes.md"))
+	}
+}
+
+func TestMirrorBranchCreatedMeanwhile(t *testing.T) {
+	f := newFake(t)
+	seedWiki(f)
+	h := newHarness(t, f)
+	h.location = `{"folder":"Mirror","branch":"wiki/mirror"}`
+	// Someone creates the branch between Tolarix reading and writing.
+	ctx := context.Background()
+	s, err := h.repo.Open(ctx, json.RawMessage(h.location))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Inventory(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f.commitFiles("wiki/mirror", map[string]string{"/x.md": "x"})
+	if err := s.PutAttachment(ctx, "Mirror/.attachments/a.png", strings.NewReader("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Finish(ctx, true); err == nil || !strings.Contains(err.Error(), "run the flow again") {
+		t.Fatalf("finish = %v", err)
+	}
+}
+
+func TestBranchLocation(t *testing.T) {
+	for in, want := range map[string]string{"wiki/mirror": "wiki/mirror", " refs/heads/docs ": "docs", "release-1.0": "release-1.0"} {
+		if got, err := CleanBranch(in); err != nil || got != want {
+			t.Errorf("CleanBranch(%q) = %q, %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"a b", "a..b", "/a", "a/", "a.lock", "-a", "a:b", "a/.b", "a@{1}", "a\\b", "@"} {
+		if _, err := CleanBranch(in); err == nil {
+			t.Errorf("CleanBranch(%q) accepted", in)
+		}
+	}
+	f := newFake(t)
+	seedWiki(f)
+	ctx := context.Background()
+	if _, err := connect(t, f, "/_wiki/wikis/Docs.wiki").Open(ctx, json.RawMessage(`{"branch":"bad name"}`)); err == nil {
+		t.Fatal("bad branch accepted")
+	}
+	spec, _ := connectors.Lookup(Kind)
+	pspec, _ := connectors.Lookup(ProjectKind)
+	if len(spec.LocationFields) != 2 || len(pspec.LocationFields) != 1 {
+		t.Fatalf("location fields: %v / %v", spec.LocationFields, pspec.LocationFields)
 	}
 }

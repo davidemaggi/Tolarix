@@ -34,23 +34,48 @@ func (r *Repo) Open(ctx context.Context, location json.RawMessage) (connectors.S
 	if root == ".." || strings.HasPrefix(root, "../") {
 		return nil, fmt.Errorf("the target folder %q must stay inside the wiki", loc.Folder)
 	}
+	var branch string
+	if strings.TrimSpace(loc.Branch) != "" {
+		if r.project {
+			return nil, errors.New("a project wiki is always on the branch wikiMaster; leave the branch empty")
+		}
+		b, err := CleanBranch(loc.Branch)
+		if err != nil {
+			return nil, err
+		}
+		branch = b
+	}
 	if err := r.resolve(ctx); err != nil {
 		return nil, err
 	}
-	return filetree.NewSession(&gitStore{r: r}, root, NewFormat()), nil
+	if branch == "" {
+		branch = r.addr.Branch
+	}
+	return filetree.NewSession(&gitStore{r: r, branch: branch}, root, NewFormat()), nil
 }
 
-// gitStore is the wiki folder at the branch head; Apply pushes one commit.
-// Paths are relative to the wiki root.
+// gitStore is the wiki folder at the head of a branch; Apply pushes one
+// commit. Paths are relative to the wiki root. A branch that does not exist
+// starts from the connection's branch, and is created only when there is
+// something to push (never in a dry-run).
 type gitStore struct {
 	r      *Repo
-	commit string // base commit ("" = branch does not exist yet)
+	branch string
+	commit string // base commit ("" = nothing to start from)
+	create bool   // branch is missing: create it at commit before pushing
 }
 
 func (g *gitStore) Load(ctx context.Context, root string) (map[string]string, error) {
-	commit, err := g.r.head(ctx)
+	commit, err := g.r.headOf(ctx, g.branch)
 	if err != nil {
 		return nil, err
+	}
+	g.create = false
+	if commit == "" && g.branch != g.r.addr.Branch {
+		if commit, err = g.r.head(ctx); err != nil {
+			return nil, err
+		}
+		g.create = commit != ""
 	}
 	g.commit = commit
 	out := map[string]string{}
@@ -86,7 +111,13 @@ func (g *gitStore) Apply(ctx context.Context, _ string, changes []filetree.Chang
 	for i, c := range changes {
 		cs[i] = change{Type: c.Type, Path: full(c.Path), From: full(c.From), Size: c.Size, Content: c.Content}
 	}
-	head, err := g.r.push(ctx, g.commit, "Tolarix: update the mirror ("+summary+")", cs)
+	if g.create {
+		if err := g.r.createBranch(ctx, g.branch, g.commit); err != nil {
+			return err
+		}
+		g.create = false
+	}
+	head, err := g.r.push(ctx, g.branch, g.commit, "Tolarix: update the mirror ("+summary+")", cs)
 	if err != nil {
 		return err
 	}

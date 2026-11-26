@@ -154,7 +154,9 @@
       "tokenHint": "Crealo in Azure DevOps da User settings → Personal access tokens, con lo scope Code (Read & write).",
       "location": {
         "folder": "Cartella nella wiki",
-        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit."
+        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit.",
+        "branch": "Branch",
+        "branchHint": "Facoltativo. Invia le modifiche a questo branch invece che a quello della wiki, per esempio wiki/mirror. Se non esiste, la prima esecuzione lo crea partendo dal branch della wiki. La wiki lo mostra solo se lo pubblichi come versione della wiki."
       }
     },
     "confluence-dc": {

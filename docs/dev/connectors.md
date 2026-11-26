@@ -131,6 +131,13 @@ repository). A project wiki address is rejected with a pointer to the Project wi
 | (written) `> [!tip] Title` | `> **Tip:** Title` (one way: the wiki has no callouts) |
 
 **As a Mirror.** Location `folder` is relative to the wiki root (empty = the root).
+Location `branch` (Code wiki only; validated by `CleanBranch` with git's ref-name rules)
+pushes to another branch. When it does not exist, the session reads the connection's
+branch as its base and, in `Apply` (so never in a dry-run or a run with nothing to
+write), creates the branch at that commit through the refs API (`oldObjectId` zero),
+then pushes on top of it. A branch created by someone else in between fails the
+creation with "run the flow again". If the push fails after the creation, the branch
+stays at the base commit, which the next run reads as its starting point.
 - The session reads the target folder once at the branch head, keeps every write in memory
   (attachments are spooled to a temp dir), and `Finish` pushes the difference as **one
   commit** (`refUpdates.oldObjectId` = the head it read). If someone pushed meanwhile,

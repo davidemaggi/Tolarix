@@ -100,6 +100,16 @@ account that only has access to the spaces or wikis it syncs.
   branch without required reviewers for Mirrors.
 - **Mirror location:** *Folder inside the wiki*, for example `Mirrors/Team`.
   Empty means the top of the wiki.
+- **Branch** (Mirror, optional): push to another branch, for example
+  `wiki/mirror`, instead of the wiki's own. If it does not exist, the first run
+  that has something to write creates it from the wiki's branch (a dry run
+  creates nothing). The token then also needs the *Create branch* permission.
+  The wiki shows that branch only if you publish it as a new wiki version (wiki
+  menu → **Publish new version**); otherwise review the
+  changes in **Repos** and merge them with a pull request. This is also the way
+  to mirror into a branch protected by required reviewers.
+- As a Master, the branch comes from the address: add `&version=GBbranch` to a
+  repository address to read another branch.
 
 ### Azure DevOps — Project wiki
 

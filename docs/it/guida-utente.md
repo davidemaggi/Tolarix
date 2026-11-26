@@ -100,6 +100,17 @@ account dedicato con accesso solo agli spazi o alle wiki che sincronizza.
   Per i Mirror usa un branch senza revisori obbligatori.
 - **Posizione nel Mirror:** *Cartella nella wiki*, per esempio `Mirror/Team`.
   Vuota indica la radice della wiki.
+- **Branch** (Mirror, facoltativo): invia le modifiche a un altro branch, per
+  esempio `wiki/mirror`, invece che a quello della wiki. Se non esiste, la prima
+  esecuzione che ha qualcosa da scrivere lo crea partendo dal branch della wiki
+  (una simulazione non crea nulla). In quel caso il token deve avere anche il
+  permesso *Create branch*. La wiki mostra quel branch solo se lo pubblichi come
+  nuova versione della wiki (menu della wiki → **Publish new version**);
+  altrimenti controlla le modifiche in **Repos** e uniscile con una pull request.
+  È anche il modo per fare da Mirror verso un branch protetto da revisori
+  obbligatori.
+- Come Master, il branch viene dall'indirizzo: aggiungi `&version=GBbranch`
+  all'indirizzo di un repository per leggere un altro branch.
 
 ### Azure DevOps — wiki di progetto (Project wiki)
 

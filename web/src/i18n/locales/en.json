@@ -154,7 +154,9 @@
       "tokenHint": "Create it in Azure DevOps under User settings → Personal access tokens, with the Code (Read & write) scope.",
       "location": {
         "folder": "Folder inside the wiki",
-        "folderHint": "Mirrored pages go into this folder, for example Mirrors/Team. Leave it empty to use the top of the wiki. Each run is pushed as one commit."
+        "folderHint": "Mirrored pages go into this folder, for example Mirrors/Team. Leave it empty to use the top of the wiki. Each run is pushed as one commit.",
+        "branch": "Branch",
+        "branchHint": "Optional. Push to this branch instead of the wiki's own, for example wiki/mirror. If it does not exist, the first run creates it from the wiki's branch. The wiki only shows it if you publish it as a wiki version."
       }
     },
     "confluence-dc": {

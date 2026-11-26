@@ -39,10 +39,16 @@ const apiVersion = "7.1"
 const projectBranch = "wikiMaster"
 
 func init() {
+	folder := connectors.Field{Name: "folder", Type: "string"}
 	for _, k := range []struct {
-		kind connectors.Kind
-		name string
-	}{{Kind, "Azure DevOps Code wiki"}, {ProjectKind, "Azure DevOps Project wiki"}} {
+		kind     connectors.Kind
+		name     string
+		location []connectors.Field
+	}{
+		// A project wiki only shows wikiMaster, so only code wikis pick a branch.
+		{Kind, "Azure DevOps Code wiki", []connectors.Field{folder, {Name: "branch", Type: "string"}}},
+		{ProjectKind, "Azure DevOps Project wiki", []connectors.Field{folder}},
+	} {
 		kind := k.kind
 		connectors.Register(connectors.Spec{
 			Kind:        kind,
@@ -53,7 +59,7 @@ func init() {
 				{Name: "url", Type: "url", Required: true},
 				{Name: "token", Type: "secret", Required: true, Secret: true},
 			},
-			LocationFields: []connectors.Field{{Name: "folder", Type: "string"}},
+			LocationFields: k.location,
 			New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
 				var c Config
 				if len(raw) > 0 {
@@ -83,6 +89,10 @@ type Config struct {
 type Location struct {
 	// Folder is relative to the wiki root ("" = the wiki root).
 	Folder string `json:"folder,omitempty"`
+	// Branch is the branch to push to (code wikis only; "" = the
+	// connection's branch). A missing branch is created from the
+	// connection's branch on the first push.
+	Branch string `json:"branch,omitempty"`
 }
 
 // Address is what an Azure DevOps URL points at.
@@ -334,18 +344,73 @@ func (r *Repo) wiki(ctx context.Context) (wikiInfo, error) {
 	return wikiInfo{}, fmt.Errorf("the project %s has no project wiki yet: create it in Azure DevOps (Overview → Wiki → Create project wiki), or check the address", a.Project)
 }
 
-// head returns the commit the branch points at, or "" when it does not exist.
-func (r *Repo) head(ctx context.Context) (string, error) {
+// head returns the commit the connection's branch points at, or "" when it
+// does not exist.
+func (r *Repo) head(ctx context.Context) (string, error) { return r.headOf(ctx, r.addr.Branch) }
+
+// headOf returns the commit branch points at, or "" when it does not exist.
+func (r *Repo) headOf(ctx context.Context, branch string) (string, error) {
 	var refs list[gitRef]
-	if err := r.client.Get(ctx, r.git("/refs", url.Values{"filter": {"heads/" + r.addr.Branch}}), &refs); err != nil {
-		return "", r.friendly(err, "the branch "+r.addr.Branch)
+	if err := r.client.Get(ctx, r.git("/refs", url.Values{"filter": {"heads/" + branch}}), &refs); err != nil {
+		return "", r.friendly(err, "the branch "+branch)
 	}
 	for _, ref := range refs.Value {
-		if ref.Name == "refs/heads/"+r.addr.Branch {
+		if ref.Name == "refs/heads/"+branch {
 			return ref.ObjectID, nil
 		}
 	}
 	return "", nil
+}
+
+// createBranch creates branch at commit (refs API: old object id zero).
+func (r *Repo) createBranch(ctx context.Context, branch, commit string) error {
+	body := []map[string]string{{"name": "refs/heads/" + branch, "oldObjectId": zeroID, "newObjectId": commit}}
+	var res list[struct {
+		Success       bool   `json:"success"`
+		UpdateStatus  string `json:"updateStatus"`
+		CustomMessage string `json:"customMessage"`
+	}]
+	if err := r.client.JSON(ctx, http.MethodPost, r.git("/refs", nil), body, &res); err != nil {
+		if httpc.StatusOf(err) == http.StatusForbidden {
+			return fmt.Errorf("the token cannot create the branch %s: give it the Code (Read & write) scope and the Create branch permission on the repository", branch)
+		}
+		return r.friendly(err, "the branch "+branch)
+	}
+	if len(res.Value) == 0 || !res.Value[0].Success {
+		why := "no result"
+		if len(res.Value) > 0 {
+			why = firstNonEmpty(res.Value[0].CustomMessage, res.Value[0].UpdateStatus)
+		}
+		if strings.Contains(strings.ToLower(why), "stale") {
+			return fmt.Errorf("the branch %s was created by someone else while Tolarix was writing; nothing was written, run the flow again", branch)
+		}
+		return fmt.Errorf("cannot create the branch %s: %s", branch, why)
+	}
+	return nil
+}
+
+// CleanBranch validates a branch name (without refs/heads/) with git's
+// rules for ref names.
+func CleanBranch(name string) (string, error) {
+	b := strings.TrimPrefix(strings.TrimSpace(name), "refs/heads/")
+	bad := b == "" || b == "@" || strings.HasPrefix(b, "/") || strings.HasSuffix(b, "/") ||
+		strings.HasSuffix(b, ".") || strings.HasSuffix(b, ".lock") || strings.HasPrefix(b, "-") ||
+		strings.Contains(b, "..") || strings.Contains(b, "//") || strings.Contains(b, "@{") ||
+		strings.ContainsAny(b, " ~^:?*[\\")
+	for _, c := range b {
+		if c < 0x20 || c == 0x7f {
+			bad = true
+		}
+	}
+	for _, seg := range strings.Split(b, "/") {
+		if strings.HasPrefix(seg, ".") {
+			bad = true
+		}
+	}
+	if bad {
+		return "", fmt.Errorf("%q is not a valid branch name: use letters, digits, - _ . and /, without spaces (for example wiki/mirror)", name)
+	}
+	return b, nil
 }
 
 // Test checks the address, the token and access to the repository.
