@@ -131,7 +131,9 @@
   "connectorKinds": {
     "obsidian": "Una cartella di file Markdown (un vault Obsidian) su questo server.",
     "azure-devops-code": "Una wiki pubblicata da un repository Git in Azure DevOps (Services o Server). Tolarix legge e invia commit tramite la REST API.",
-    "confluence-dc": "Uno spazio Confluence Data Center o Server, oppure una pagina con tutto quello che contiene."
+    "confluence-dc": "Uno spazio Confluence Data Center o Server, oppure una pagina con tutto quello che contiene.",
+    "azure-devops-project": "La wiki di progetto di un progetto Azure DevOps (Services o Server). Tolarix legge e invia commit al suo repository Git nascosto tramite la REST API.",
+    "confluence-cloud": "Uno spazio Confluence Cloud (atlassian.net), oppure una pagina con tutto quello che contiene."
   },
   "connectorFields": {
     "obsidian": {
@@ -162,6 +164,28 @@
       "location": {
         "parent": "Pagina padre",
         "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la radice dello spazio."
+      }
+    },
+    "azure-devops-project": {
+      "url": "Indirizzo della wiki di progetto",
+      "urlHint": "Apri la wiki di progetto in Azure DevOps e copia l'indirizzo dal browser (…/<progetto>/_wiki).",
+      "token": "Personal access token",
+      "tokenHint": "Crealo in Azure DevOps da User settings → Personal access tokens, con lo scope Code (Read & write).",
+      "location": {
+        "folder": "Cartella nella wiki",
+        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit."
+      }
+    },
+    "confluence-cloud": {
+      "url": "Indirizzo dello spazio o della pagina",
+      "urlHint": "Apri lo spazio (o la pagina da cui partire) in Confluence e copia l'indirizzo dal browser, per esempio https://tuo-sito.atlassian.net/wiki/spaces/DOC/overview.",
+      "email": "Email",
+      "emailHint": "L'email dell'account Atlassian a cui appartiene l'API token.",
+      "token": "API token",
+      "tokenHint": "Crea un API token classico su id.atlassian.com → Security → API tokens. I token con scope non sono ancora supportati.",
+      "location": {
+        "parent": "Pagina padre",
+        "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la home page dello spazio."
       }
     }
   },

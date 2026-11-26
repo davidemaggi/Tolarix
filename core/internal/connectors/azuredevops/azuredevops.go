@@ -1,10 +1,11 @@
-// Package azuredevops is the Azure DevOps Code wiki connector: a wiki
-// published from a folder of a Git repository. It reads and writes the
-// repository through the Git REST API (no clone), and a run's writes become
-// a single push.
+// Package azuredevops holds the Azure DevOps wiki connectors:
 //
-// The reader and writer work on any repository + branch + folder, so the
-// Project wiki (a hidden "<project>.wiki" repository) can reuse them.
+//   - Code wiki: a wiki published from a folder of a Git repository;
+//   - Project wiki: the wiki every project can create, stored in a hidden
+//     "<project>.wiki" repository on the branch "wikiMaster".
+//
+// Both read and write the repository through the Git REST API (no clone),
+// and a run's writes become a single push.
 //
 // See docs/dev/connectors.md for naming, ordering and link rules.
 package azuredevops
@@ -26,39 +27,55 @@ import (
 	"github.com/davidemaggi/tolarix/core/internal/secrets"
 )
 
-// Kind is the registry key.
-const Kind connectors.Kind = "azure-devops-code"
+// Registry keys.
+const (
+	Kind        connectors.Kind = "azure-devops-code"
+	ProjectKind connectors.Kind = "azure-devops-project"
+)
 
 const apiVersion = "7.1"
 
+// projectBranch is the branch a project wiki lives on.
+const projectBranch = "wikiMaster"
+
 func init() {
-	connectors.Register(connectors.Spec{
-		Kind:        Kind,
-		DisplayName: "Azure DevOps Code wiki",
-		CanRead:     true,
-		CanWrite:    true,
-		Fields: []connectors.Field{
-			{Name: "url", Type: "url", Required: true},
-			{Name: "token", Type: "secret", Required: true, Secret: true},
-		},
-		LocationFields: []connectors.Field{{Name: "folder", Type: "string"}},
-		New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
-			var c Config
-			if len(raw) > 0 {
-				if err := json.Unmarshal(raw, &c); err != nil {
-					return nil, fmt.Errorf("invalid Azure DevOps connection settings: %w", err)
+	for _, k := range []struct {
+		kind connectors.Kind
+		name string
+	}{{Kind, "Azure DevOps Code wiki"}, {ProjectKind, "Azure DevOps Project wiki"}} {
+		kind := k.kind
+		connectors.Register(connectors.Spec{
+			Kind:        kind,
+			DisplayName: k.name,
+			CanRead:     true,
+			CanWrite:    true,
+			Fields: []connectors.Field{
+				{Name: "url", Type: "url", Required: true},
+				{Name: "token", Type: "secret", Required: true, Secret: true},
+			},
+			LocationFields: []connectors.Field{{Name: "folder", Type: "string"}},
+			New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
+				var c Config
+				if len(raw) > 0 {
+					if err := json.Unmarshal(raw, &c); err != nil {
+						return nil, fmt.Errorf("invalid Azure DevOps connection settings: %w", err)
+					}
 				}
-			}
-			return New(c, secret)
-		},
-	})
+				if kind == ProjectKind {
+					return NewProject(c, secret)
+				}
+				return New(c, secret)
+			},
+		})
+	}
 }
 
 // Config is the stored connection configuration. The personal access token
 // is the connection secret.
 type Config struct {
-	// URL is the address of the wiki (…/_wiki/wikis/<name>) or of the
-	// repository folder the wiki is published from (…/_git/<repo>?path=/docs).
+	// URL is the address of the wiki (…/_wiki/wikis/<name>) or, for a code
+	// wiki, of the repository folder it is published from
+	// (…/_git/<repo>?path=/docs).
 	URL string `json:"url"`
 }
 
@@ -80,8 +97,9 @@ type Address struct {
 
 // Repo is a configured connection; it is a Source and a Target.
 type Repo struct {
-	addr   Address
-	client *httpc.Client
+	addr    Address
+	client  *httpc.Client
+	project bool // a project wiki connection
 
 	mu       sync.Mutex
 	resolved bool
@@ -93,27 +111,55 @@ var (
 	_ connectors.Target = (*Repo)(nil)
 )
 
-// New builds a connection.
+// New builds a code wiki connection.
 func New(c Config, token secrets.String) (*Repo, error) {
 	addr, err := ParseURL(c.URL)
 	if err != nil {
 		return nil, err
 	}
+	return newRepo(addr, token, false)
+}
+
+// NewProject builds a project wiki connection.
+func NewProject(c Config, token secrets.String) (*Repo, error) {
+	addr, err := ParseProjectURL(c.URL)
+	if err != nil {
+		return nil, err
+	}
+	return newRepo(addr, token, true)
+}
+
+func newRepo(addr Address, token secrets.String, project bool) (*Repo, error) {
 	if !token.IsSet() {
 		return nil, errors.New("the personal access token is missing: create one in Azure DevOps (User settings → Personal access tokens) with the Code (Read & write) scope and paste it here")
 	}
 	auth := func(r *http.Request) {
 		r.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(":"+token.Reveal())))
 	}
-	return &Repo{addr: addr, client: httpc.New(addr.BaseURL, auth)}, nil
+	return &Repo{addr: addr, client: httpc.New(addr.BaseURL, auth), project: project}, nil
 }
 
 // Client exposes the HTTP client (tests shorten its retries).
 func (r *Repo) Client() *httpc.Client { return r.client }
 
-// ParseURL reads the address of a wiki or a repository as copied from the
-// browser.
-func ParseURL(raw string) (Address, error) {
+// ParseURL reads the address of a code wiki or a repository as copied from
+// the browser.
+func ParseURL(raw string) (Address, error) { return parseURL(raw, false) }
+
+// ParseProjectURL reads the address of a project wiki: …/_wiki/wikis/<name>,
+// or just …/<project>/_wiki (the project's wiki is looked up).
+func ParseProjectURL(raw string) (Address, error) {
+	a, err := parseURL(raw, true)
+	if err != nil {
+		return Address{}, err
+	}
+	if a.Repo != "" {
+		return Address{}, fmt.Errorf("%q is a repository address; for a project wiki, open the wiki in Azure DevOps (Overview → Wiki) and copy that address", strings.TrimSpace(raw))
+	}
+	return a, nil
+}
+
+func parseURL(raw string, bareWiki bool) (Address, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return Address{}, errors.New("the address is missing: open the wiki in Azure DevOps and copy the address from the browser")
@@ -139,7 +185,8 @@ func ParseURL(raw string) (Address, error) {
 		}
 	}
 	notWiki := fmt.Errorf("%q does not look like the address of an Azure DevOps wiki or repository. Open the wiki (or the repository folder it is published from) and copy the address from the browser", raw)
-	if marker < 0 || marker+1 >= len(segs) {
+	bare := bareWiki && marker >= 0 && marker == len(segs)-1 && segs[marker] == "_wiki"
+	if marker < 0 || (marker+1 >= len(segs) && !bare) {
 		return Address{}, notWiki
 	}
 	// How many leading segments name the organisation or collection.
@@ -177,10 +224,16 @@ func ParseURL(raw string) (Address, error) {
 			a.Folder = cleanFolder(path.Dir(a.Folder))
 		}
 	case "_wiki":
-		if marker+2 >= len(segs) || segs[marker+1] != "wikis" || marker == orgSegs {
+		if marker == orgSegs {
 			return Address{}, notWiki
 		}
 		a.Project = segs[marker-1]
+		if bare {
+			break
+		}
+		if marker+2 >= len(segs) || segs[marker+1] != "wikis" {
+			return Address{}, notWiki
+		}
 		a.Wiki = segs[marker+2]
 	}
 	if a.Project == "" {
@@ -219,18 +272,25 @@ func (r *Repo) resolve(ctx context.Context) error {
 		return nil
 	}
 	a := &r.addr
-	if a.Wiki != "" {
-		var w wikiInfo
-		if err := r.client.Get(ctx, r.api("wiki/wikis/"+url.PathEscape(a.Wiki), nil), &w); err != nil {
-			return r.friendly(err, "the wiki "+a.Wiki)
+	if a.Wiki != "" || r.project {
+		w, err := r.wiki(ctx)
+		if err != nil {
+			return err
 		}
-		if w.Type != "codeWiki" {
-			return fmt.Errorf("%q is a project wiki; this connection type is for code wikis (wikis published from a repository). Project wikis are supported in a later version", w.Name)
+		switch {
+		case r.project && w.Type != "projectWiki":
+			return fmt.Errorf("%q is a code wiki (published from a repository); create the connection as \"Azure DevOps Code wiki\" instead", w.Name)
+		case !r.project && w.Type == "projectWiki":
+			return fmt.Errorf("%q is a project wiki; create the connection as \"Azure DevOps Project wiki\" instead", w.Name)
 		}
+		a.Wiki = w.Name
 		a.Repo = w.RepositoryID
 		a.Folder = cleanFolder(w.MappedPath)
 		if a.Branch == "" && len(w.Versions) > 0 {
 			a.Branch = w.Versions[0].Version
+		}
+		if a.Branch == "" && r.project {
+			a.Branch = projectBranch
 		}
 	}
 	var repo repoInfo
@@ -249,6 +309,29 @@ func (r *Repo) resolve(ctx context.Context) error {
 	}
 	r.resolved = true
 	return nil
+}
+
+// wiki reads the wiki the address names; for a project wiki address without
+// a name, the project's wiki.
+func (r *Repo) wiki(ctx context.Context) (wikiInfo, error) {
+	a := &r.addr
+	if a.Wiki != "" {
+		var w wikiInfo
+		if err := r.client.Get(ctx, r.api("wiki/wikis/"+url.PathEscape(a.Wiki), nil), &w); err != nil {
+			return wikiInfo{}, r.friendly(err, "the wiki "+a.Wiki)
+		}
+		return w, nil
+	}
+	var all list[wikiInfo]
+	if err := r.client.Get(ctx, r.api("wiki/wikis", nil), &all); err != nil {
+		return wikiInfo{}, r.friendly(err, "the wikis of the project")
+	}
+	for _, w := range all.Value {
+		if w.Type == "projectWiki" {
+			return w, nil
+		}
+	}
+	return wikiInfo{}, fmt.Errorf("the project %s has no project wiki yet: create it in Azure DevOps (Overview → Wiki → Create project wiki), or check the address", a.Project)
 }
 
 // head returns the commit the branch points at, or "" when it does not exist.

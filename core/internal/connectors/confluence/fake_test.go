@@ -30,12 +30,20 @@ type fakeConfluence struct {
 	atts   map[string]*fakeAtt
 	calls  []string // "METHOD path" of writes
 	limit  int      // max page size the server honours
+	ctx    string   // context path: /confluence (Data Center) or /wiki (Cloud)
+
+	// Cloud mode serves REST v2 (fake_cloud_test.go) with Basic auth.
+	cloud   bool
+	email   string
+	spaceID string
+	home    string // homepage id
 }
 
 type fakePage struct {
 	ID, Title, Parent, Body string
 	Version                 int
 	Order                   int
+	Folder                  bool // Cloud folder
 }
 
 type fakeAtt struct {
@@ -46,13 +54,13 @@ type fakeAtt struct {
 
 func newFake(t *testing.T) *fakeConfluence {
 	f := &fakeConfluence{t: t, token: "tok", space: "DOC", nextID: 1000,
-		pages: map[string]*fakePage{}, atts: map[string]*fakeAtt{}, limit: 2}
+		pages: map[string]*fakePage{}, atts: map[string]*fakeAtt{}, limit: 2, ctx: ctxPath}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
 }
 
-func (f *fakeConfluence) url(p string) string { return f.srv.URL + ctxPath + p }
+func (f *fakeConfluence) url(p string) string { return f.srv.URL + f.ctx + p }
 
 func (f *fakeConfluence) addPage(title, parent, body string) string {
 	f.mu.Lock()
@@ -121,7 +129,7 @@ func (f *fakeConfluence) pageJSON(p *fakePage, expand string) map[string]any {
 func (f *fakeConfluence) children(parent string) []*fakePage {
 	var out []*fakePage
 	for _, p := range f.pages {
-		if p.Parent == parent {
+		if p.Parent == parent && !p.Folder {
 			out = append(out, p)
 		}
 	}
@@ -139,11 +147,11 @@ func (f *fakeConfluence) paged(w http.ResponseWriter, r *http.Request, items []m
 	if start > len(items) {
 		start = end
 	}
-	links := map[string]any{"base": f.srv.URL + ctxPath, "context": ctxPath}
+	links := map[string]any{"base": f.srv.URL + f.ctx, "context": f.ctx}
 	if end < len(items) {
 		q := r.URL.Query()
 		q.Set("start", strconv.Itoa(end))
-		links["next"] = strings.TrimPrefix(r.URL.Path, ctxPath) + "?" + q.Encode()
+		links["next"] = strings.TrimPrefix(r.URL.Path, f.ctx) + "?" + q.Encode()
 	}
 	writeJSON(w, map[string]any{"results": items[start:end], "size": end - start, "start": start, "limit": limit, "_links": links})
 }
@@ -175,11 +183,16 @@ type putBody struct {
 }
 
 func (f *fakeConfluence) serve(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+f.token {
+	if f.cloud {
+		if u, p, ok := r.BasicAuth(); !ok || u != f.email || p != f.token {
+			fail(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+	} else if r.Header.Get("Authorization") != "Bearer "+f.token {
 		fail(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	path, ok := strings.CutPrefix(r.URL.Path, ctxPath)
+	path, ok := strings.CutPrefix(r.URL.Path, f.ctx)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -191,6 +204,19 @@ func (f *fakeConfluence) serve(w http.ResponseWriter, r *http.Request) {
 	seg := strings.Split(strings.Trim(path, "/"), "/")
 	if r.Method != http.MethodGet {
 		f.calls = append(f.calls, r.Method+" "+path)
+	}
+	if f.cloud {
+		if strings.HasPrefix(path, "/api/v2/") {
+			f.serveV2(w, r, path)
+			return
+		}
+		// Cloud keeps only attachment upload and download on v1.
+		upload := r.Method == http.MethodPost && strings.Contains(path, "/child/attachment")
+		if !upload && !strings.HasPrefix(path, "/download/attachments/") {
+			f.t.Errorf("fake confluence cloud: v1 call %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
+			return
+		}
 	}
 
 	switch {

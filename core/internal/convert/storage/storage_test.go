@@ -66,6 +66,15 @@ func (e *fakeEnv) Heading(pageID, anchor string) string {
 
 func (e *fakeEnv) Warn(code, _ string) { e.warnings = append(e.warnings, code) }
 
+// PageByURL knows the Cloud address of Backend Guide.
+func (e *fakeEnv) PageByURL(href string) (string, string, string, bool) {
+	page, anchor, _ := strings.Cut(href, "#")
+	if strings.HasPrefix(page, "https://example.atlassian.net/wiki/spaces/DOC/pages/200") {
+		return "200", "Backend Guide", anchor, true
+	}
+	return "", "", "", false
+}
+
 // fakeWriter is the same space seen from the writing side.
 type fakeWriter struct{ warnings []string }
 

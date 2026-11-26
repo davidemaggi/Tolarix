@@ -143,6 +143,17 @@ func (f *fakeADO) serve(w http.ResponseWriter, r *http.Request) {
 	seg := strings.Split(rest, "/")
 	q := r.URL.Query()
 
+	if len(seg) == 2 && seg[0] == "wiki" && seg[1] == "wikis" {
+		f.mu.Lock()
+		var all []wikiInfo
+		for _, w := range f.wikis {
+			all = append(all, w)
+		}
+		f.mu.Unlock()
+		sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
+		writeJSON(w, list[wikiInfo]{Count: len(all), Value: all})
+		return
+	}
 	if len(seg) == 3 && seg[0] == "wiki" && seg[1] == "wikis" {
 		f.mu.Lock()
 		wi, ok := f.wikis[seg[2]]

@@ -402,7 +402,7 @@ func TestConnections(t *testing.T) {
 	for _, k := range kinds {
 		names = append(names, k["kind"].(string))
 	}
-	if strings.Join(names, ",") != "azure-devops-code,confluence-dc,obsidian" {
+	if strings.Join(names, ",") != "azure-devops-code,azure-devops-project,confluence-cloud,confluence-dc,obsidian" {
 		t.Fatalf("kinds: %v", names)
 	}
 

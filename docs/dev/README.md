@@ -112,8 +112,8 @@ core/                     Go module github.com/davidemaggi/tolarix/core
   internal/cli/           cobra commands; exit codes are in root.go and are a public contract
   internal/connectors/    the Source/Target/Session contract + registry
     obsidian/             Obsidian vault connector (decode, encode, write session) + golden tests
-    confluence/           Confluence Data Center / Server (REST v1) + in-memory API fake
-    azuredevops/          Azure DevOps Code wiki over the Git REST API + in-memory API fake
+    confluence/           Confluence Data Center / Server (REST v1) and Cloud (REST v2) + in-memory API fakes
+    azuredevops/          Azure DevOps Code and Project wikis over the Git REST API + in-memory API fake
     all/                  blank-imports every connector (import this to register them)
   internal/convert/mdscan/ Markdown scanning that never touches code blocks/spans/comments
   internal/convert/storage/ Confluence storage format <-> Markdown (shared by DC and Cloud)

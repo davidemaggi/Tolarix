@@ -1,6 +1,7 @@
-// Package confluence is the Confluence Data Center / Server connector
-// (REST API v1, storage format). It reads a space or a page subtree as a
-// Master and writes Mirrors under a parent page or at the top of a space.
+// Package confluence holds the Confluence connectors: Data Center / Server
+// (REST API v1) and Cloud (REST API v2), both on the storage format. Each
+// reads a space or a page subtree as a Master and writes Mirrors under a
+// parent page or at the top of a space.
 //
 // See docs/dev/connectors.md for the mapping, identity and archive rules.
 package confluence
@@ -21,10 +22,23 @@ import (
 	"github.com/davidemaggi/tolarix/core/internal/secrets"
 )
 
-// Kind is the registry key.
-const Kind connectors.Kind = "confluence-dc"
+// Registry keys.
+const (
+	Kind      connectors.Kind = "confluence-dc"
+	CloudKind connectors.Kind = "confluence-cloud"
+)
 
 func init() {
+	location := []connectors.Field{{Name: "parent", Type: "string"}}
+	decode := func(raw json.RawMessage) (Config, error) {
+		var c Config
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &c); err != nil {
+				return c, fmt.Errorf("invalid Confluence connection settings: %w", err)
+			}
+		}
+		return c, nil
+	}
 	connectors.Register(connectors.Spec{
 		Kind:        Kind,
 		DisplayName: "Confluence Data Center / Server",
@@ -35,15 +49,32 @@ func init() {
 			{Name: "token", Type: "secret", Required: true, Secret: true},
 			{Name: "username", Type: "string"},
 		},
-		LocationFields: []connectors.Field{{Name: "parent", Type: "string"}},
+		LocationFields: location,
 		New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
-			var c Config
-			if len(raw) > 0 {
-				if err := json.Unmarshal(raw, &c); err != nil {
-					return nil, fmt.Errorf("invalid Confluence connection settings: %w", err)
-				}
+			c, err := decode(raw)
+			if err != nil {
+				return nil, err
 			}
 			return New(c, secret)
+		},
+	})
+	connectors.Register(connectors.Spec{
+		Kind:        CloudKind,
+		DisplayName: "Confluence Cloud",
+		CanRead:     true,
+		CanWrite:    true,
+		Fields: []connectors.Field{
+			{Name: "url", Type: "url", Required: true},
+			{Name: "email", Type: "string", Required: true},
+			{Name: "token", Type: "secret", Required: true, Secret: true},
+		},
+		LocationFields: location,
+		New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
+			c, err := decode(raw)
+			if err != nil {
+				return nil, err
+			}
+			return NewCloud(c, secret)
 		},
 	})
 }
@@ -55,12 +86,16 @@ type Config struct {
 	// Username switches to basic authentication (username + token as the
 	// password) for servers without personal access tokens.
 	Username string `json:"username,omitempty"`
+	// Email is the Atlassian account of a Cloud connection; the token is
+	// an API token of that account.
+	Email string `json:"email,omitempty"`
 }
 
 // Location is a flow target inside the space.
 type Location struct {
 	// Parent is the title or numeric id of the page mirrored pages go under.
-	// Empty: the connection's page, or the top of the space.
+	// Empty: the connection's page, else the top of the space (Data Center)
+	// or the space homepage (Cloud).
 	Parent string `json:"parent,omitempty"`
 }
 
@@ -76,6 +111,8 @@ type Address struct {
 type Confluence struct {
 	addr   Address
 	client *httpc.Client
+	api    api
+	cloud  bool
 
 	mu       sync.Mutex
 	resolved bool
@@ -103,7 +140,32 @@ func New(c Config, token secrets.String) (*Confluence, error) {
 		}
 		r.Header.Set("Authorization", "Bearer "+token.Reveal())
 	}
-	return &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth)}, nil
+	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth)}
+	c2.api = &v1{c: c2}
+	return c2, nil
+}
+
+// NewCloud builds a Confluence Cloud connection (email + API token).
+func NewCloud(c Config, token secrets.String) (*Confluence, error) {
+	addr, err := ParseURL(c.URL)
+	if err != nil {
+		return nil, err
+	}
+	// Cloud sites live under /wiki; accept an address that lost it.
+	if u, err := url.Parse(addr.BaseURL); err == nil && strings.HasSuffix(u.Hostname(), ".atlassian.net") && u.Path == "" {
+		addr.BaseURL += "/wiki"
+	}
+	email := strings.TrimSpace(c.Email)
+	if email == "" {
+		return nil, errors.New("the email is missing: enter the email of the Atlassian account the API token belongs to")
+	}
+	if !token.IsSet() {
+		return nil, errors.New("the API token is missing: create one at id.atlassian.com (Security → API tokens) and paste it here")
+	}
+	auth := func(r *http.Request) { r.SetBasicAuth(email, token.Reveal()) }
+	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth), cloud: true}
+	c2.api = &v2{c: c2}
+	return c2, nil
 }
 
 // Client exposes the HTTP client (tests shorten its retries).
@@ -177,16 +239,16 @@ func (c *Confluence) resolve(ctx context.Context) error {
 	a := &c.addr
 	switch {
 	case a.PageID != "":
-		var p content
-		if err := c.client.Get(ctx, "/rest/api/content/"+url.PathEscape(a.PageID)+"?expand=space", &p); err != nil {
+		p, err := c.api.page(ctx, a.PageID, false)
+		if err != nil {
 			return c.friendly(err, "the page "+a.PageID)
 		}
 		a.PageTitle = p.Title
-		if p.Space != nil && a.SpaceKey == "" {
-			a.SpaceKey = p.Space.Key
+		if p.SpaceKey != "" && a.SpaceKey == "" {
+			a.SpaceKey = p.SpaceKey
 		}
 	case a.PageTitle != "":
-		p, err := c.findByTitle(ctx, a.SpaceKey, a.PageTitle)
+		p, err := c.api.pageByTitle(ctx, a.PageTitle)
 		if err != nil {
 			return c.friendly(err, "the space "+a.SpaceKey)
 		}
@@ -199,28 +261,12 @@ func (c *Confluence) resolve(ctx context.Context) error {
 	return nil
 }
 
-func (c *Confluence) findByTitle(ctx context.Context, space, title string) (*content, error) {
-	q := url.Values{"spaceKey": {space}, "title": {title}, "type": {"page"}, "expand": {"version"}}
-	var res results[content]
-	if err := c.client.Get(ctx, "/rest/api/content?"+q.Encode(), &res); err != nil {
-		return nil, err
-	}
-	if len(res.Results) == 0 {
-		return nil, nil
-	}
-	return &res.Results[0], nil
-}
-
 // Test checks the address, the token and access to the space.
 func (c *Confluence) Test(ctx context.Context) error {
 	if err := c.resolve(ctx); err != nil {
 		return err
 	}
-	var sp struct {
-		Key  string `json:"key"`
-		Name string `json:"name"`
-	}
-	if err := c.client.Get(ctx, "/rest/api/space/"+url.PathEscape(c.addr.SpaceKey), &sp); err != nil {
+	if err := c.api.space(ctx); err != nil {
 		return c.friendly(err, "the space "+c.addr.SpaceKey)
 	}
 	return nil
@@ -235,6 +281,9 @@ func (c *Confluence) friendly(err error, what string) error {
 		}
 		return fmt.Errorf("cannot reach Confluence at %s; check the address and the network (proxy, VPN): %w", c.addr.BaseURL, err)
 	case http.StatusUnauthorized:
+		if c.cloud {
+			return errors.New("Confluence Cloud rejected the credentials: check the email and the API token (id.atlassian.com → Security → API tokens); scoped API tokens are not supported, use a classic one")
+		}
 		return errors.New("Confluence rejected the token: check that the personal access token is correct and not expired (with a username set, the token is used as the password)")
 	case http.StatusForbidden:
 		return fmt.Errorf("the token works but has no permission on %s: ask a space admin for access", what)
@@ -242,82 +291,5 @@ func (c *Confluence) friendly(err error, what string) error {
 		return fmt.Errorf("%s does not exist or this token cannot see it; check the address", what)
 	default:
 		return err
-	}
-}
-
-// ---- API types ----
-
-type results[T any] struct {
-	Results []T `json:"results"`
-	Size    int `json:"size"`
-	Links   struct {
-		Next string `json:"next"`
-	} `json:"_links"`
-}
-
-type content struct {
-	ID     string `json:"id"`
-	Type   string `json:"type,omitempty"`
-	Status string `json:"status,omitempty"`
-	Title  string `json:"title"`
-	Space  *struct {
-		Key string `json:"key"`
-	} `json:"space,omitempty"`
-	Version *struct {
-		Number int `json:"number"`
-	} `json:"version,omitempty"`
-	Body *struct {
-		Storage struct {
-			Value string `json:"value"`
-		} `json:"storage"`
-	} `json:"body,omitempty"`
-	Ancestors []struct {
-		ID string `json:"id"`
-	} `json:"ancestors,omitempty"`
-	Children *struct {
-		Page *struct {
-			Size int `json:"size"`
-		} `json:"page"`
-	} `json:"children,omitempty"`
-	Extensions *struct {
-		MediaType string `json:"mediaType"`
-		FileSize  int64  `json:"fileSize"`
-	} `json:"extensions,omitempty"`
-	Links struct {
-		Download string `json:"download"`
-	} `json:"_links"`
-}
-
-func (p *content) version() int {
-	if p.Version == nil {
-		return 0
-	}
-	return p.Version.Number
-}
-
-func (p *content) storage() string {
-	if p.Body == nil {
-		return ""
-	}
-	return p.Body.Storage.Value
-}
-
-// list fetches every page of a paged collection.
-func list[T any](ctx context.Context, c *httpc.Client, path string, limit int) ([]T, error) {
-	var out []T
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
-	}
-	for start := 0; ; {
-		var res results[T]
-		if err := c.Get(ctx, fmt.Sprintf("%s%sstart=%d&limit=%d", path, sep, start, limit), &res); err != nil {
-			return nil, err
-		}
-		out = append(out, res.Results...)
-		if res.Links.Next == "" || len(res.Results) == 0 {
-			return out, nil
-		}
-		start += len(res.Results)
 	}
 }

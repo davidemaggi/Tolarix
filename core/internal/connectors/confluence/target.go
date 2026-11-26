@@ -55,23 +55,28 @@ func (c *Confluence) Open(ctx context.Context, raw json.RawMessage) (connectors.
 		s.rootID, s.rootTitle = p.ID, p.Title
 	case c.addr.PageID != "":
 		s.rootID, s.rootTitle = c.addr.PageID, c.addr.PageTitle
+	default:
+		id, title, err := c.api.defaultParent(ctx)
+		if err != nil {
+			return nil, c.friendly(err, "the space "+c.addr.SpaceKey)
+		}
+		s.rootID, s.rootTitle = id, title
 	}
 	return s, nil
 }
 
 // findPage resolves a page given by numeric id or by title in the space.
-func (c *Confluence) findPage(ctx context.Context, ref string) (*content, error) {
+func (c *Confluence) findPage(ctx context.Context, ref string) (*page, error) {
 	if _, err := strconv.ParseUint(ref, 10, 64); err == nil {
-		var p content
-		err := c.client.Get(ctx, "/rest/api/content/"+ref, &p)
+		p, err := c.api.page(ctx, ref, false)
 		if err == nil {
-			return &p, nil
+			return p, nil
 		}
 		if httpc.StatusOf(err) != http.StatusNotFound {
 			return nil, c.friendly(err, "the page "+ref)
 		}
 	}
-	p, err := c.findByTitle(ctx, c.addr.SpaceKey, ref)
+	p, err := c.api.pageByTitle(ctx, ref)
 	if err != nil {
 		return nil, c.friendly(err, "the space "+c.addr.SpaceKey)
 	}
@@ -253,15 +258,14 @@ func (s *session) ContentHash(content []byte) string { return model.HashBytes(co
 // Inventory lists every page of the space by title: titles are unique per
 // space, so a page anywhere in it blocks the title.
 func (s *session) Inventory(ctx context.Context) (map[string]connectors.MirrorItem, error) {
-	q := url.Values{"spaceKey": {s.space}, "type": {"page"}, "expand": {"version"}}
-	pages, err := list[content](ctx, s.c.client, "/rest/api/content?"+q.Encode(), 200)
+	pages, err := s.c.api.allPages(ctx)
 	if err != nil {
 		return nil, s.c.friendly(err, "the space "+s.space)
 	}
 	out := make(map[string]connectors.MirrorItem, len(pages))
 	for _, p := range pages {
-		s.byTitle[strings.ToLower(p.Title)] = &pageRef{id: p.ID, title: p.Title, version: p.version()}
-		out[p.Title] = connectors.MirrorItem{ID: p.ID, Key: p.Title, Version: strconv.Itoa(p.version())}
+		s.byTitle[strings.ToLower(p.Title)] = &pageRef{id: p.ID, title: p.Title, version: p.Version}
+		out[p.Title] = connectors.MirrorItem{ID: p.ID, Key: p.Title, Version: strconv.Itoa(p.Version)}
 	}
 	return out, nil
 }
@@ -274,34 +278,6 @@ func (s *session) parentID(parentKey string) (string, error) {
 		return p.id, nil
 	}
 	return "", fmt.Errorf("the parent page %q is not in the mirror yet", parentKey)
-}
-
-type pageBody struct {
-	ID        string              `json:"id,omitempty"`
-	Type      string              `json:"type"`
-	Title     string              `json:"title"`
-	Space     map[string]string   `json:"space"`
-	Ancestors []map[string]string `json:"ancestors,omitempty"`
-	Version   *struct {
-		Number    int  `json:"number"`
-		MinorEdit bool `json:"minorEdit"`
-	} `json:"version,omitempty"`
-	Body struct {
-		Storage struct {
-			Value          string `json:"value"`
-			Representation string `json:"representation"`
-		} `json:"storage"`
-	} `json:"body"`
-}
-
-func (s *session) newBody(title, parentID, value string) *pageBody {
-	b := &pageBody{Type: "page", Title: title, Space: map[string]string{"key": s.space}}
-	if parentID != "" {
-		b.Ancestors = []map[string]string{{"id": parentID}}
-	}
-	b.Body.Storage.Value = value
-	b.Body.Storage.Representation = "storage"
-	return b
 }
 
 func (s *session) WritePage(ctx context.Context, w connectors.PageWrite) (connectors.MirrorItem, error) {
@@ -319,14 +295,14 @@ func (s *session) WritePage(ctx context.Context, w connectors.PageWrite) (connec
 		hash = ""
 	}
 
-	var res content
+	var res *page
 	switch {
 	case w.Existing == nil && w.Placeholder && s.byTitle[strings.ToLower(title)] != nil:
 		// A folder-only page whose title already exists: use that page as is.
 		p := s.byTitle[strings.ToLower(title)]
 		return connectors.MirrorItem{ID: p.id, Key: p.title, Version: strconv.Itoa(p.version)}, s.flush(ctx, p.title)
 	case w.Existing == nil:
-		if err := s.c.client.JSON(ctx, http.MethodPost, "/rest/api/content", s.newBody(title, parentID, body), &res); err != nil {
+		if res, err = s.c.api.create(ctx, title, parentID, body); err != nil {
 			return connectors.MirrorItem{}, fmt.Errorf("create %q: %w", title, err)
 		}
 	default:
@@ -335,20 +311,14 @@ func (s *session) WritePage(ctx context.Context, w connectors.PageWrite) (connec
 		if err != nil {
 			return connectors.MirrorItem{}, err
 		}
-		b := s.newBody(title, parentID, body)
-		b.ID = id
-		b.Version = &struct {
-			Number    int  `json:"number"`
-			MinorEdit bool `json:"minorEdit"`
-		}{version + 1, true}
-		if err := s.c.client.JSON(ctx, http.MethodPut, "/rest/api/content/"+url.PathEscape(id), b, &res); err != nil {
+		if res, err = s.c.api.update(ctx, id, title, parentID, body, version+1); err != nil {
 			return connectors.MirrorItem{}, fmt.Errorf("update %q: %w", title, err)
 		}
 		if old := w.Existing.Key; old != "" && !strings.EqualFold(old, title) {
 			delete(s.byTitle, strings.ToLower(old))
 		}
 	}
-	ref := &pageRef{id: res.ID, title: res.Title, version: res.version()}
+	ref := &pageRef{id: res.ID, title: res.Title, version: res.Version}
 	s.byTitle[strings.ToLower(res.Title)] = ref
 	if err := s.flush(ctx, res.Title); err != nil {
 		return connectors.MirrorItem{}, err
@@ -364,15 +334,15 @@ func (s *session) currentVersion(ctx context.Context, id string) (int, error) {
 			return p.version, nil
 		}
 	}
-	var p content
-	if err := s.c.client.Get(ctx, "/rest/api/content/"+url.PathEscape(id)+"?expand=version", &p); err != nil {
+	p, err := s.c.api.page(ctx, id, false)
+	if err != nil {
 		return 0, err
 	}
-	return p.version(), nil
+	return p.Version, nil
 }
 
 func (s *session) DeletePage(ctx context.Context, item connectors.MirrorItem) error {
-	err := s.c.client.JSON(ctx, http.MethodDelete, "/rest/api/content/"+url.PathEscape(item.ID), nil, nil)
+	err := s.c.api.deletePage(ctx, item.ID)
 	if err != nil && httpc.StatusOf(err) != http.StatusNotFound {
 		return err
 	}
@@ -387,8 +357,8 @@ func (s *session) ArchivePage(ctx context.Context, item connectors.MirrorItem) (
 	if err != nil {
 		return connectors.MirrorItem{}, err
 	}
-	var cur content
-	if err := s.c.client.Get(ctx, "/rest/api/content/"+url.PathEscape(item.ID)+"?expand="+pageExpand, &cur); err != nil {
+	cur, err := s.c.api.page(ctx, item.ID, true)
+	if err != nil {
 		return connectors.MirrorItem{}, err
 	}
 	base := cleanTitle(strings.TrimSuffix(cur.Title, " (archived)") + " (archived)")
@@ -400,19 +370,13 @@ func (s *session) ArchivePage(ctx context.Context, item connectors.MirrorItem) (
 		}
 		title = cleanTitle(strings.TrimSuffix(base, " (archived)") + " (archived " + strconv.Itoa(n) + ")")
 	}
-	b := s.newBody(title, arch.id, cur.storage())
-	b.ID = item.ID
-	b.Version = &struct {
-		Number    int  `json:"number"`
-		MinorEdit bool `json:"minorEdit"`
-	}{cur.version() + 1, true}
-	var res content
-	if err := s.c.client.JSON(ctx, http.MethodPut, "/rest/api/content/"+url.PathEscape(item.ID), b, &res); err != nil {
+	res, err := s.c.api.update(ctx, item.ID, title, arch.id, cur.Body, cur.Version+1)
+	if err != nil {
 		return connectors.MirrorItem{}, fmt.Errorf("archive %q: %w", cur.Title, err)
 	}
 	delete(s.byTitle, strings.ToLower(item.Key))
-	s.byTitle[strings.ToLower(res.Title)] = &pageRef{id: res.ID, title: res.Title, version: res.version()}
-	return connectors.MirrorItem{ID: res.ID, Key: res.Title, Hash: item.Hash, Version: strconv.Itoa(res.version())}, nil
+	s.byTitle[strings.ToLower(res.Title)] = &pageRef{id: res.ID, title: res.Title, version: res.Version}
+	return connectors.MirrorItem{ID: res.ID, Key: res.Title, Hash: item.Hash, Version: strconv.Itoa(res.Version)}, nil
 }
 
 func (s *session) archivePage(ctx context.Context) (*pageRef, error) {
@@ -424,18 +388,18 @@ func (s *session) archivePage(ctx context.Context) (*pageRef, error) {
 		s.archive = p
 		return p, nil
 	}
-	if p, err := s.c.findByTitle(ctx, s.space, title); err != nil {
+	if p, err := s.c.api.pageByTitle(ctx, title); err != nil {
 		return nil, err
 	} else if p != nil {
-		s.archive = &pageRef{id: p.ID, title: p.Title, version: p.version()}
+		s.archive = &pageRef{id: p.ID, title: p.Title, version: p.Version}
 		return s.archive, nil
 	}
 	body := `<p>Pages removed from the Master are moved here by Tolarix. You can delete them when they are no longer needed.</p>`
-	var res content
-	if err := s.c.client.JSON(ctx, http.MethodPost, "/rest/api/content", s.newBody(title, s.rootID, body), &res); err != nil {
+	res, err := s.c.api.create(ctx, title, s.rootID, body)
+	if err != nil {
 		return nil, fmt.Errorf("create the archive page %q: %w", title, err)
 	}
-	s.archive = &pageRef{id: res.ID, title: res.Title, version: res.version()}
+	s.archive = &pageRef{id: res.ID, title: res.Title, version: res.Version}
 	s.byTitle[strings.ToLower(res.Title)] = s.archive
 	return s.archive, nil
 }
@@ -447,7 +411,7 @@ func (s *session) ownerAttachments(ctx context.Context, pageID string) (map[stri
 	if m, ok := s.atts[pageID]; ok {
 		return m, nil
 	}
-	list, err := list[content](ctx, s.c.client, "/rest/api/content/"+url.PathEscape(pageID)+"/child/attachment", 200)
+	list, err := s.c.api.attachments(ctx, pageID)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +569,7 @@ func (s *session) DeleteAttachment(ctx context.Context, key string) error {
 	if !ok {
 		return nil
 	}
-	if err := s.c.client.JSON(ctx, http.MethodDelete, "/rest/api/content/"+url.PathEscape(id), nil, nil); err != nil && httpc.StatusOf(err) != http.StatusNotFound {
+	if err := s.c.api.deleteAttachment(ctx, id); err != nil && httpc.StatusOf(err) != http.StatusNotFound {
 		return err
 	}
 	delete(m, name)

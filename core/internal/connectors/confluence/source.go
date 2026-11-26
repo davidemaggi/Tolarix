@@ -6,11 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
 	"github.com/davidemaggi/tolarix/core/internal/convert/storage"
@@ -18,12 +17,7 @@ import (
 	"github.com/davidemaggi/tolarix/core/internal/model"
 )
 
-const (
-	pageExpand = "body.storage,version"
-	pageLimit  = 100
-	fetchers   = 8
-	drawioType = "application/vnd.jgraph.mxfile"
-)
+const drawioType = "application/vnd.jgraph.mxfile"
 
 // hashCache remembers attachment hashes across runs in this process, keyed
 // by base URL, attachment id and version, so unchanged attachments are not
@@ -35,33 +29,28 @@ type hashed struct {
 	size int64
 }
 
-type fetched struct {
-	page   content
-	parent string
-	order  int
-}
-
 // Snapshot reads the configured page and its subtree, or the whole space.
 func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.Tree, error) {
 	if err := c.Test(ctx); err != nil {
 		return nil, err
 	}
-	pages, err := c.fetchTree(ctx)
+	pages, err := c.api.tree(ctx, c.addr.PageID)
 	if err != nil {
 		return nil, err
 	}
 	snap := &snapshot{c: c, ctx: ctx, w: w, tree: model.NewTree(),
 		byTitle: map[string]string{}, raw: map[string]string{}, titles: map[string]string{},
-		atts: map[string]map[string]content{}}
+		atts: map[string]map[string]attachment{}}
 	for _, f := range pages {
 		snap.byTitle[f.page.Title] = f.page.ID
-		snap.raw[f.page.ID] = f.page.storage()
+		snap.raw[f.page.ID] = f.page.Body
 		snap.titles[f.page.ID] = f.page.Title
 	}
 	for _, f := range pages {
-		p := &model.Page{ID: f.page.ID, ParentID: f.parent, Name: f.page.Title, Title: f.page.Title, Order: f.order}
+		p := &model.Page{ID: f.page.ID, ParentID: f.parent, Name: f.page.Title, Title: f.page.Title, Order: f.order,
+			Placeholder: f.page.Folder}
 		env := &pageEnv{snap: snap, page: p}
-		body, err := storage.ToMarkdown(f.page.storage(), env)
+		body, err := storage.ToMarkdown(f.page.Body, env)
 		if err != nil {
 			w.Warn(connectors.Warning{PageID: p.ID, Code: "page-unreadable",
 				Message: fmt.Sprintf("the content of %q could not be read (%v); the page is mirrored empty", p.Title, err)})
@@ -70,58 +59,6 @@ func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.
 		snap.tree.Add(p)
 	}
 	return snap.tree, nil
-}
-
-// fetchTree lists the pages breadth-first, children in Confluence's order.
-func (c *Confluence) fetchTree(ctx context.Context) ([]fetched, error) {
-	var level []fetched
-	if c.addr.PageID != "" {
-		var root content
-		if err := c.client.Get(ctx, "/rest/api/content/"+url.PathEscape(c.addr.PageID)+"?expand="+pageExpand, &root); err != nil {
-			return nil, c.friendly(err, "the page "+c.addr.PageID)
-		}
-		level = []fetched{{page: root}}
-	} else {
-		roots, err := list[content](ctx, c.client, "/rest/api/space/"+url.PathEscape(c.addr.SpaceKey)+"/content/page?depth=root&expand="+pageExpand, pageLimit)
-		if err != nil {
-			return nil, c.friendly(err, "the space "+c.addr.SpaceKey)
-		}
-		for i, r := range roots {
-			level = append(level, fetched{page: r, order: i})
-		}
-	}
-	var all []fetched
-	seen := map[string]bool{}
-	for len(level) > 0 {
-		all = append(all, level...)
-		kids := make([][]content, len(level))
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(fetchers)
-		for i, f := range level {
-			seen[f.page.ID] = true
-			g.Go(func() error {
-				ch, err := list[content](gctx, c.client, "/rest/api/content/"+url.PathEscape(f.page.ID)+"/child/page?expand="+pageExpand, pageLimit)
-				if err != nil {
-					return fmt.Errorf("list the child pages of %q: %w", f.page.Title, err)
-				}
-				kids[i] = ch
-				return nil
-			})
-		}
-		if err := g.Wait(); err != nil {
-			return nil, err
-		}
-		var next []fetched
-		for i, f := range level {
-			for j, k := range kids[i] {
-				if !seen[k.ID] {
-					next = append(next, fetched{page: k, parent: f.page.ID, order: j})
-				}
-			}
-		}
-		level = next
-	}
-	return all, nil
 }
 
 // snapshot is the state shared by the pages of one Snapshot call.
@@ -134,15 +71,15 @@ type snapshot struct {
 	titles  map[string]string // page id -> title
 	raw     map[string]string // page id -> storage body
 	heads   map[string][]string
-	atts    map[string]map[string]content // page id -> filename -> attachment
+	atts    map[string]map[string]attachment // page id -> filename -> attachment
 }
 
-func (s *snapshot) attachments(pageID string) map[string]content {
+func (s *snapshot) attachments(pageID string) map[string]attachment {
 	if m, ok := s.atts[pageID]; ok {
 		return m
 	}
-	m := map[string]content{}
-	list, err := list[content](s.ctx, s.c.client, "/rest/api/content/"+url.PathEscape(pageID)+"/child/attachment?expand=version", 200)
+	m := map[string]attachment{}
+	list, err := s.c.api.attachments(s.ctx, pageID)
 	if err != nil {
 		s.w.Warn(connectors.Warning{PageID: pageID, Code: "attachments-unreadable",
 			Message: fmt.Sprintf("the attachments of %q could not be listed: %v", s.titles[pageID], err)})
@@ -156,11 +93,11 @@ func (s *snapshot) attachments(pageID string) map[string]content {
 
 // register hashes an attachment (downloading it unless cached) and adds it
 // to the tree.
-func (s *snapshot) register(a content, name string, role model.AttachmentRole, mediaType string) (string, error) {
-	key := s.c.addr.BaseURL + "|" + a.ID + "|" + strconv.Itoa(a.version())
+func (s *snapshot) register(a attachment, name string, role model.AttachmentRole, mediaType string) (string, error) {
+	key := s.c.addr.BaseURL + "|" + a.ID + "|" + strconv.Itoa(a.Version)
 	h, ok := hashCache.Load(key)
 	if !ok {
-		rc, err := s.c.OpenAttachment(s.ctx, a.Links.Download)
+		rc, err := s.c.OpenAttachment(s.ctx, a.Download)
 		if err != nil {
 			return "", err
 		}
@@ -173,12 +110,12 @@ func (s *snapshot) register(a content, name string, role model.AttachmentRole, m
 		hashCache.Store(key, h)
 	}
 	hv := h.(hashed)
-	if mediaType == "" && a.Extensions != nil {
-		mediaType = a.Extensions.MediaType
+	if mediaType == "" {
+		mediaType = a.MediaType
 	}
 	if existing := s.tree.Attachments[hv.hash]; existing == nil {
 		s.tree.Attachments[hv.hash] = &model.Attachment{Hash: hv.hash, Name: name, Size: hv.size,
-			MediaType: mediaType, SourceRef: a.Links.Download, Role: role}
+			MediaType: mediaType, SourceRef: a.Download, Role: role}
 	} else if role != "" {
 		existing.Role = role
 	}
@@ -219,6 +156,57 @@ func (e *pageEnv) Heading(pageID, anchor string) string {
 	return anchor
 }
 
+var (
+	reLinkSpacePage = regexp.MustCompile(`/spaces/[^/]+/pages/(\d+)`)
+	reLinkDisplay   = regexp.MustCompile(`/display/([^/]+)/([^/?#]+)/?$`)
+)
+
+// PageByURL maps the web address of a page of the snapshot (Cloud smart
+// links, pasted addresses) to the page (storage.PageURLResolver).
+func (e *pageEnv) PageByURL(href string) (string, string, string, bool) {
+	u, err := url.Parse(href)
+	if err != nil {
+		return "", "", "", false
+	}
+	base, err := url.Parse(e.snap.c.addr.BaseURL)
+	if err != nil {
+		return "", "", "", false
+	}
+	if u.IsAbs() && !strings.EqualFold(u.Host, base.Host) {
+		return "", "", "", false
+	}
+	if !u.IsAbs() && u.Host != "" {
+		return "", "", "", false
+	}
+	p := u.EscapedPath()
+	if !strings.HasPrefix(p, strings.TrimRight(base.Path, "/")+"/") {
+		return "", "", "", false
+	}
+	var id string
+	if m := reLinkSpacePage.FindStringSubmatch(p); m != nil {
+		id = m[1]
+	} else if v := u.Query().Get("pageId"); v != "" && strings.HasSuffix(p, "/pages/viewpage.action") {
+		id = v
+	} else if m := reLinkDisplay.FindStringSubmatch(p); m != nil {
+		if !strings.EqualFold(unescapeSegment(m[1]), e.snap.c.addr.SpaceKey) {
+			return "", "", "", false
+		}
+		id = e.snap.byTitle[unescapeSegment(m[2])]
+	}
+	title, ok := e.snap.titles[id]
+	if !ok {
+		return "", "", "", false
+	}
+	return id, title, u.Fragment, true
+}
+
+func unescapeSegment(s string) string {
+	if v, err := url.PathUnescape(s); err == nil {
+		s = v
+	}
+	return strings.ReplaceAll(s, "+", " ")
+}
+
 func (e *pageEnv) owner(ownerTitle string) (string, bool) {
 	if ownerTitle == "" || ownerTitle == e.page.Title {
 		return e.page.ID, true
@@ -239,7 +227,7 @@ func (e *pageEnv) Attachment(ownerTitle, filename string) (string, bool) {
 	return e.add(a, filename, "", "")
 }
 
-func (e *pageEnv) add(a content, name string, role model.AttachmentRole, mediaType string) (string, bool) {
+func (e *pageEnv) add(a attachment, name string, role model.AttachmentRole, mediaType string) (string, bool) {
 	hash, err := e.snap.register(a, name, role, mediaType)
 	if err != nil {
 		e.Warn("attachment-failed", fmt.Sprintf("the attachment %q could not be downloaded: %v", name, err))
@@ -307,29 +295,31 @@ func (c *Confluence) Browse(ctx context.Context, parentID string) ([]connectors.
 	if err := c.resolve(ctx); err != nil {
 		return nil, err
 	}
-	var pages []content
+	var pages []page
 	switch {
 	case parentID == "" && c.addr.PageID != "":
-		var p content
-		if err := c.client.Get(ctx, "/rest/api/content/"+url.PathEscape(c.addr.PageID)+"?expand=children.page", &p); err != nil {
+		p, err := c.api.page(ctx, c.addr.PageID, false)
+		if err != nil {
 			return nil, c.friendly(err, "the page "+c.addr.PageID)
 		}
-		pages = []content{p}
+		if c.cloud {
+			p.HasChildren = true
+		}
+		pages = []page{*p}
 	case parentID == "":
 		var err error
-		if pages, err = list[content](ctx, c.client, "/rest/api/space/"+url.PathEscape(c.addr.SpaceKey)+"/content/page?depth=root&expand=children.page", pageLimit); err != nil {
+		if pages, err = c.api.children(ctx, ""); err != nil {
 			return nil, c.friendly(err, "the space "+c.addr.SpaceKey)
 		}
 	default:
 		var err error
-		if pages, err = list[content](ctx, c.client, "/rest/api/content/"+url.PathEscape(parentID)+"/child/page?expand=children.page", pageLimit); err != nil {
+		if pages, err = c.api.children(ctx, parentID); err != nil {
 			return nil, err
 		}
 	}
 	out := make([]connectors.Node, 0, len(pages))
 	for _, p := range pages {
-		has := p.Children != nil && p.Children.Page != nil && p.Children.Page.Size > 0
-		out = append(out, connectors.Node{ID: p.ID, Title: p.Title, HasChildren: has})
+		out = append(out, connectors.Node{ID: p.ID, Title: p.Title, HasChildren: p.HasChildren})
 	}
 	return out, nil
 }

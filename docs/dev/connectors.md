@@ -16,8 +16,9 @@ See the decisions log in [plan.md](plan.md) ("Taken during M2").
 
 ## Confluence Data Center / Server (`confluence-dc`)
 
-Code: `internal/connectors/confluence` (REST API v1) and `internal/convert/storage`
-(storage format ⇄ Markdown, shared with Confluence Cloud in M5).
+Code: `internal/connectors/confluence` (REST API v1, `v1.go`) and `internal/convert/storage`
+(storage format ⇄ Markdown, shared with Confluence Cloud). Source and target code is shared
+with Cloud; each REST call goes through the `api` interface (`api.go`).
 
 **Connection.** `url` is the address of a space (`/display/KEY`, `/spaces/viewspace.action?key=`)
 or of a page (`/display/KEY/Title`, `/pages/viewpage.action?pageId=` or `?spaceKey=&title=`).
@@ -61,18 +62,48 @@ Empty means the connection's page, or the top of the space.
 | Mermaid fence (written) | `code` macro titled `mermaid` (Data Center has no built-in Mermaid) |
 | any other macro | a ```` ```confluence-macro ```` block holding the raw XML, with a warning; written back verbatim to Confluence |
 
+## Confluence Cloud (`confluence-cloud`)
+
+Code: the same package, REST API v2 in `v2.go`. Everything from the Data Center section
+applies, with these differences.
+
+**Connection.** `url` is the address of a space or a page on `<site>.atlassian.net`
+(`/wiki/spaces/KEY/overview`, `/wiki/spaces/KEY/pages/ID/Title`); `/wiki` is added when
+missing. `email` + `token` are an Atlassian account and a classic API token
+(id.atlassian.com → Security → API tokens), sent as Basic. Scoped tokens are not supported.
+
+**API.** REST v2 (`/wiki/api/v2`, cursor pagination, `_links.next`). Attachment upload and
+download stay on the v1 endpoints, which v2 does not replace.
+
+**As a Master.**
+- The space is read with one paged listing of every current page with its body
+  (`/spaces/{id}/pages?depth=all`); the tree is built from `parentId` and `position`.
+  A page address mirrors that page and everything below it.
+- Folders become title-only pages (placeholders). Only folders that hold pages are seen.
+- Smart links (a plain link to the address of a page in the snapshot) become page links;
+  when the link text was the address, the page title is used.
+- ADF blocks in storage format (`ac:adf-extension`): panels become callouts (info → `[!info]`,
+  note/custom → `[!note]`, success/tip → `[!tip]`, warning → `[!warning]`, error → `[!danger]`);
+  anything else uses its `ac:adf-fallback`.
+- Cloud anchors (`#Getting-Started`) are matched to headings like Data Center ones.
+- Whiteboards, databases and embeds are skipped.
+
+**As a Mirror.** With no parent and a space address, mirrors go under the space homepage
+(where Cloud puts new pages) and the archive page is `Archived – <homepage title>`. Titles
+are kept unique per space as on Data Center, although Cloud would allow duplicates.
+
 ## Azure DevOps Code wiki (`azure-devops-code`)
 
 Code: `internal/connectors/azuredevops`. Everything goes through the Git REST API 7.1,
-so the Project wiki (M5, a hidden `<name>.wiki` repository) can reuse it.
+so the Project wiki (a hidden `<name>.wiki` repository) reuses it.
 
 **Connection.** `url` is a wiki address (`…/_wiki/wikis/<name>`), which is resolved through
 the wiki API to its repository, mapped folder and branch, or a repository folder
 (`…/_git/<repo>?path=/docs&version=GBbranch`). Supported hosts: `dev.azure.com/<org>`,
 `<org>.visualstudio.com[/DefaultCollection]`, and Server (`https://host/tfs/<collection>`).
 Without a branch, the repository's default branch is used (`main` for an empty
-repository). A project wiki address is rejected until M5. `token` is a PAT with
-Code (Read & write), sent as Basic `:token`.
+repository). A project wiki address is rejected with a pointer to the Project wiki kind.
+`token` is a PAT with Code (Read & write), sent as Basic `:token`.
 
 **Wiki conventions.**
 - A page is `Name.md`. Its subpages live in the sibling folder `Name/`. A folder with no
@@ -118,6 +149,15 @@ Code (Read & write), sent as Basic `:token`.
   later part fails, the earlier parts stay pushed (see the follow-ups in plan.md).
 - Edits made in the wiki are detected through the git blob id, then overwritten with a
   `mirror-edited` warning.
+
+## Azure DevOps Project wiki (`azure-devops-project`)
+
+The same code as the Code wiki. `url` is the project wiki (`…/<project>/_wiki` or
+`…/_wiki/wikis/<name>.wiki`); the wiki API gives its hidden repository. The branch is
+`wikiMaster` and the wiki root is the repository root. A project without a project wiki
+gets "create it in Azure DevOps (Overview → Wiki → Create project wiki)"; a code wiki
+address points to the Code wiki kind. Conventions, dialect and mirror behaviour are the
+Code wiki's.
 
 ## Testing
 

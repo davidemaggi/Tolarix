@@ -214,12 +214,17 @@ type mirrorHarness struct {
 	src   *obsidian.Vault
 	conf  *Confluence
 	store *enginetest.MemStore
+	loc   string // mirror location; default {"parent":"Mirror Root"}
 }
 
 func (h *mirrorHarness) run(opts engine.Options) *engine.TargetReport {
 	h.t.Helper()
 	ctx := context.Background()
-	s, err := h.conf.Open(ctx, json.RawMessage(`{"parent":"Mirror Root"}`))
+	loc := h.loc
+	if loc == "" {
+		loc = `{"parent":"Mirror Root"}`
+	}
+	s, err := h.conf.Open(ctx, json.RawMessage(loc))
 	if err != nil {
 		h.t.Fatal(err)
 	}

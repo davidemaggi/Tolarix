@@ -1,0 +1,22 @@
+- Home (id=1001 order=0)
+    | Welcome. Read [Backend Guide](tolarix://page/1002#Getting%20Started) and [the team](tolarix://page/1004) or [elsewhere](https://example.com/x).
+    | 
+    | > [!note]
+    | > Remember the ![photo.png](tolarix://att/d7ffca10adb56aae70c0d0f044bf34d7438e10fbd57c9856ee606ab60a9429f5) photo.
+    @ photo.png d7ffca10 role="" type=application/octet-stream
+  - Backend Guide (id=1002 order=0)
+      | ## Getting Started
+      | 
+      | Install it.
+  - Team (id=1003 order=1)
+      | 
+    - People (id=1004 order=0)
+        | Who is who.
+    - Old Stuff (id=1005 order=1)
+        | 
+      - Retired (id=1006 order=0)
+          | Gone.
+- Other Root (id=1007 order=1)
+    | Elsewhere
+placeholder Team
+placeholder Old Stuff

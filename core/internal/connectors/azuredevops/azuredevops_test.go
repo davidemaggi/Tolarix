@@ -52,6 +52,26 @@ func TestParseURL(t *testing.T) {
 	}
 }
 
+func TestParseProjectURL(t *testing.T) {
+	base := "https://dev.azure.com/org"
+	for in, want := range map[string]Address{
+		base + "/P/_wiki":                         {BaseURL: base, Project: "P"},
+		base + "/P/_wiki/wikis/P.wiki":            {BaseURL: base, Project: "P", Wiki: "P.wiki"},
+		base + "/P/_wiki/wikis/P.wiki/3/Home?x=1": {BaseURL: base, Project: "P", Wiki: "P.wiki"},
+		"https://org.visualstudio.com/P/_wiki/":   {BaseURL: "https://org.visualstudio.com", Project: "P"},
+	} {
+		got, err := ParseProjectURL(in)
+		if err != nil || got != want {
+			t.Errorf("%q: got %+v, %v", in, got, err)
+		}
+	}
+	for _, in := range []string{base + "/P/_git/repo", base + "/_wiki", base + "/P"} {
+		if _, err := ParseProjectURL(in); err == nil {
+			t.Errorf("%q: want an error", in)
+		}
+	}
+}
+
 func TestNames(t *testing.T) {
 	for _, title := range []string{"Getting Started", "Q&A: what? why*", "50% off - now", "a/b\\c", ".hidden.", "C# <tips> | \"quotes\""} {
 		enc := EncodeName(title)
@@ -105,6 +125,15 @@ func TestBlocks(t *testing.T) {
 	}
 }
 
+func connectProject(t *testing.T, f *fakeADO, rest string) *Repo {
+	t.Helper()
+	r, err := NewProject(Config{URL: f.url(rest)}, secrets.New(f.token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
 func connect(t *testing.T, f *fakeADO, rest string) *Repo {
 	t.Helper()
 	r, err := New(Config{URL: f.url(rest)}, secrets.New(f.token))
@@ -120,7 +149,12 @@ func addWiki(f *fakeADO) {
 		Version string `json:"version"`
 	}{"main"})
 	f.wikis["Docs.wiki"] = w
-	f.wikis["Project.wiki"] = wikiInfo{Name: "Project.wiki", Type: "projectWiki"}
+	// The fake has one repository: the project wiki lives on its wikiMaster branch.
+	pw := wikiInfo{Name: "Project.wiki", Type: "projectWiki", RepositoryID: fakeRepoID, MappedPath: "/"}
+	pw.Versions = append(pw.Versions, struct {
+		Version string `json:"version"`
+	}{projectBranch})
+	f.wikis["Project.wiki"] = pw
 }
 
 func seedWiki(f *fakeADO) {
@@ -190,8 +224,49 @@ func TestTestGivesFriendlyErrors(t *testing.T) {
 	if err := connect(t, f, "/_git/nope").Test(ctx); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("missing repo: %v", err)
 	}
-	if err := connect(t, f, "/_wiki/wikis/Project.wiki").Test(ctx); err == nil || !strings.Contains(err.Error(), "project wiki") {
-		t.Fatalf("project wiki: %v", err)
+	if err := connect(t, f, "/_wiki/wikis/Project.wiki").Test(ctx); err == nil || !strings.Contains(err.Error(), `"Azure DevOps Project wiki"`) {
+		t.Fatalf("project wiki on a code wiki connection: %v", err)
+	}
+	if err := connectProject(t, f, "/_wiki/wikis/Docs.wiki").Test(ctx); err == nil || !strings.Contains(err.Error(), `"Azure DevOps Code wiki"`) {
+		t.Fatalf("code wiki on a project wiki connection: %v", err)
+	}
+	if _, err := NewProject(Config{URL: f.url("/_git/" + fakeRepo)}, secrets.New(f.token)); err == nil || !strings.Contains(err.Error(), "repository address") {
+		t.Fatalf("repository address on a project wiki connection: %v", err)
+	}
+	delete(f.wikis, "Project.wiki")
+	if err := connectProject(t, f, "/_wiki").Test(ctx); err == nil || !strings.Contains(err.Error(), "no project wiki yet") {
+		t.Fatalf("project without a wiki: %v", err)
+	}
+}
+
+// TestProjectWiki reads and mirrors a project wiki found from the bare
+// …/_wiki address: the wiki root is the repository root on wikiMaster.
+func TestProjectWiki(t *testing.T) {
+	f := newFake(t)
+	addWiki(f)
+	f.commitFiles(projectBranch, map[string]string{
+		"/.order":                "Home\nTeam\n",
+		"/Home.md":               "# Home\n\nSee [the team](/Team).\n",
+		"/Team.md":               "Team page ![logo](/.attachments/logo.png)\n",
+		"/.attachments/logo.png": "PNG-logo",
+	})
+	r := connectProject(t, f, "/_wiki")
+	tree, err := r.Snapshot(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := dumpTree(tree); !strings.Contains(got, "- Home (id=Home order=0") || !strings.Contains(got, "- Team (id=Team order=1") || !strings.Contains(got, "@ logo.png") {
+		t.Fatalf("snapshot:\n%s", got)
+	}
+
+	h := newHarness(t, f)
+	h.repo = r
+	h.run(engine.Options{})
+	if got := f.file(projectBranch, "/Mirror/Guide.md"); !strings.Contains(got, "[[_TOC_]]") {
+		t.Fatalf("Mirror/Guide.md on %s = %q", projectBranch, got)
+	}
+	if f.file("main", "/wiki/Mirror/Guide.md") != "" {
+		t.Fatal("the code wiki branch must not change")
 	}
 }
 

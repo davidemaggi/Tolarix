@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,6 +33,13 @@ type Env interface {
 	Warn(code, message string)
 }
 
+// PageURLResolver is an optional Env extension. Confluence Cloud writes many
+// page links as plain web addresses (smart links); PageByURL maps the address
+// of a page in the snapshot to its canonical id, title and anchor.
+type PageURLResolver interface {
+	PageByURL(href string) (id, title, anchor string, ok bool)
+}
+
 // ToMarkdown converts a storage-format body to canonical Markdown.
 func ToMarkdown(src string, env Env) (string, error) {
 	root, err := parse(src)
@@ -58,6 +66,7 @@ var blockElems = map[string]bool{
 	"ul": true, "ol": true, "pre": true, "blockquote": true, "table": true, "hr": true,
 	"div": true, "section": true, "center": true, "ac:task-list": true,
 	"ac:layout": true, "ac:layout-section": true, "ac:layout-cell": true,
+	"ac:adf-extension": true,
 }
 
 // Macros that sit inside a line of text.
@@ -134,9 +143,46 @@ func (c *toMD) block(n *node) []string {
 		return nil
 	case "ac:structured-macro", "ac:macro":
 		return c.macro(n)
+	case "ac:adf-extension":
+		return c.adfExtension(n)
 	default:
 		return c.blocks(n.kids)
 	}
+}
+
+// panelFromADF maps the panel types of the Confluence Cloud editor.
+var panelFromADF = map[string]string{
+	"info": "info", "note": "note", "success": "tip", "tip": "tip",
+	"warning": "warning", "error": "danger", "custom": "note",
+}
+
+// adfExtension renders content of the Confluence Cloud editor that has no
+// storage-format equivalent (custom panels, decision lists, …): panels
+// become callouts, anything else its HTML fallback.
+func (c *toMD) adfExtension(n *node) []string {
+	adf := n.child("ac:adf-node")
+	if adf != nil && adf.attr("type") == "panel" {
+		kind := "info"
+		for _, a := range adf.kids {
+			if a.name == "ac:adf-attribute" && a.attr("key") == "panel-type" {
+				kind = strings.ToLower(strings.TrimSpace(a.textContent()))
+			}
+		}
+		callout := panelFromADF[kind]
+		if callout == "" {
+			callout = "note"
+		}
+		return c.callout(callout, "", "", adf.child("ac:adf-content"))
+	}
+	if fb := n.child("ac:adf-fallback"); fb != nil {
+		return c.blocks(fb.kids)
+	}
+	if adf != nil {
+		if body := adf.child("ac:adf-content"); body != nil {
+			return c.blocks(body.kids)
+		}
+	}
+	return nil
 }
 
 const heldMark = "\x00"
@@ -258,7 +304,13 @@ func (c *toMD) inlineNode(w *inlineWriter, n *node) {
 		w.raw(emoticon(n))
 	case "time":
 		w.text(n.attr("datetime"))
-	case "ac:placeholder", "ac:parameter":
+	case "ac:placeholder", "ac:parameter", "ac:adf-attribute":
+	case "ac:adf-extension":
+		if fb := n.child("ac:adf-fallback"); fb != nil {
+			c.inlineChildren(w, fb)
+		} else if adf := n.child("ac:adf-node"); adf != nil {
+			c.inlineChildren(w, adf)
+		}
 	case "ac:structured-macro", "ac:macro":
 		switch name := macroName(n); name {
 		case "status":
@@ -338,6 +390,15 @@ func (c *toMD) anchorLink(w *inlineWriter, n *node) {
 		self := c.env.SelfID()
 		w.raw("[" + text + "](" + model.PageLink(self, c.env.Heading(self, frag)) + ")")
 		return
+	}
+	if r, ok := c.env.(PageURLResolver); ok {
+		if id, title, anchor, ok := r.PageByURL(href); ok {
+			if text == escapeMD(href) && title != "" { // a smart link shows the address
+				text = escapeMD(title)
+			}
+			w.raw("[" + text + "](" + model.PageLink(id, c.env.Heading(id, anchor)) + ")")
+			return
+		}
 	}
 	w.raw("[" + text + "](" + mdURL(href) + ")")
 }
@@ -727,8 +788,12 @@ func Headings(src string) []string {
 
 // HeadingForAnchor finds the heading whose Confluence anchor is anchor.
 func HeadingForAnchor(headings []string, anchor string) (string, bool) {
+	if dec, err := url.PathUnescape(anchor); err == nil {
+		anchor = dec
+	}
 	for _, h := range headings {
-		if anchorName(h) == anchor || h == anchor {
+		// Data Center drops the spaces; Cloud turns them into dashes.
+		if anchorName(h) == anchor || h == anchor || strings.Join(strings.Fields(h), "-") == anchor {
 			return h, true
 		}
 	}

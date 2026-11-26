@@ -82,10 +82,10 @@ new wiki means writing one connector; the sync engine doesn't change.
 | Wiki | As Master | As Mirror | Status |
 |---|:---:|:---:|---|
 | Obsidian vault | ✅ | ✅ | ✅ works |
-| Confluence Data Center / Server | ✅ | ✅ | ✅ works (M4, in review) |
-| Azure DevOps — Code wiki | ✅ | ✅ | ✅ works (M4, in review) |
-| Confluence Cloud | ✅ | ✅ | 🗓️ planned (M5) |
-| Azure DevOps — Project wiki | ✅ | ✅ | 🗓️ planned (M5) |
+| Confluence Data Center / Server | ✅ | ✅ | ✅ works (M4) |
+| Azure DevOps — Code wiki | ✅ | ✅ | ✅ works (M4) |
+| Confluence Cloud | ✅ | ✅ | ✅ works (M5, in review) |
+| Azure DevOps — Project wiki | ✅ | ✅ | ✅ works (M5, in review) |
 
 ## 🗺️ Roadmap
 
@@ -93,7 +93,7 @@ new wiki means writing one connector; the sync engine doesn't change.
 - [x] **M2 · Sync engine + Obsidian.** Canonical model, incremental sync, moves, delete policies, dry-run, CLI
 - [x] **M3 · Web app + Docker.** Admin login, guided wizards, dashboard, live run logs
 - [x] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
-- [ ] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
+- [x] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
 - [ ] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
 - [ ] **M7 · Desktop app.** Installers for Windows, macOS and Linux
 - [ ] **M8 · v1.0.** Docs, hardening, accessibility pass, release

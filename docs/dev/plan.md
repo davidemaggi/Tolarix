@@ -13,20 +13,20 @@ The original product brief is in [brief.md](brief.md).
 | 1 | Scaffold: Go core, SQLite + migrations, CLI skeleton, React + shadcn, i18n en/it, theme, CI | done | `develop` |
 | 2 | Canonical model, Obsidian connector, sync engine + mapping, dry-run, `flow run` CLI, renderer pipeline (interface) | done | `develop` |
 | 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | done | `develop` |
-| 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | **done, awaiting review** | `develop` |
-| 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | | |
+| 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | done | `develop` |
+| 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | **done, awaiting review** | `develop` |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | | |
 | 7 | Tauri desktop app with Go sidecar, installers | | |
 | 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | | |
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
-### Where we left off (2026-11-25)
+### Where we left off (2026-11-26)
 
-- M3 was approved ("vai avanti", 2026-11-25). M4 is committed on `develop` (not pushed). Start the next session by asking for the M4 review and approval to begin M5.
-- Defaults chosen in M2–M4 that are awaiting review are listed under "Taken during M2/M3/M4" below. How each wiki is mapped: [connectors.md](connectors.md).
-- M4 was tested against in-memory fakes of the Confluence and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis is the first thing to do with the product owner.
-- **Next: M5.** Confluence Cloud and Azure DevOps Project wiki.
+- M4 was approved ("procedi", 2026-11-26). M5 is committed on `develop` (not pushed). Start the next session by asking for the M5 review and approval to begin M6.
+- Defaults chosen in M2–M5 that are awaiting review are listed under "Taken during M2/M3/M4/M5" below. How each wiki is mapped: [connectors.md](connectors.md).
+- M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is the first thing to do with the product owner.
+- **Next: M6.** Built-in scheduler, schedule wizard, `run-due`, run locking end to end.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -98,6 +98,13 @@ Taken during M4:
 - **draw.io → PNG order**: preview next to the diagram, render cache (`<dataDir>/cache/render`), export server (`TOLARIX_DRAWIO_EXPORT_URL`, `jgraph/export-server` as an optional compose service), draw.io Desktop. Without any of them the mirror keeps the `.drawio` link and the run warns how to enable one. First page only.
 - **HTTP retries** (`internal/httpc`): 429 and 503 always; 500/502/504 and network errors only for idempotent methods; honours `Retry-After` and rate-limit headers.
 
+Taken during M5:
+- **Confluence Cloud** is its own kind (`confluence-cloud`: url, email, API token; Basic `email:token`). It shares the source, target and storage converter with Data Center; every REST call goes through an internal `api` interface with a v1 (Data Center) and a v2 (Cloud) implementation. Cloud uses REST v2 everywhere except attachment upload and download, which v2 does not offer (v1 endpoints, as Atlassian documents).
+- **Cloud as a Master**: the whole space is read with one paged `/spaces/{id}/pages?depth=all` listing (bodies included) and the tree is built from `parentId` + `position`; folders are fetched one by one and become placeholder pages. Smart links (plain `<a href>` to a page of the snapshot, `/wiki/spaces/KEY/pages/ID/…`) become page links, with the title as text when the link showed the address. ADF panels (`ac:adf-extension`) become callouts; other ADF blocks use their fallback. Cloud anchors (`#Getting-Started`) are matched to headings.
+- **Cloud as a Mirror**: with no parent and a space address, mirrors go under the **space homepage** (where Cloud puts new pages), and the archive page is `Archived – <homepage title>`. Titles are still kept unique per space, as on Data Center.
+- **Cloud API tokens**: classic tokens only; a 401 says to check the email and token and that scoped tokens are not supported. An `atlassian.net` address without `/wiki` gets it added.
+- **ADO Project wiki** is its own kind (`azure-devops-project`) on the same git reader/writer: the address is the project wiki (`…/<project>/_wiki` or `…/_wiki/wikis/<name>.wiki`); the wiki API gives the hidden `<name>.wiki` repository; branch `wikiMaster`, mapped path `/`. A project without a project wiki gets "create it in Azure DevOps (Overview → Wiki → Create project wiki)". Addresses of the wrong wiki type point to the other kind.
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
@@ -113,7 +120,7 @@ Taken during M4:
 
 ## Known follow-ups
 - Server validation messages and the default banner text are English only: return message keys + params so the UI (and mirrors) can translate them.
-- Connector field labels in the UI come from `connectorFields.<kind>.<field>` translations, falling back to a humanised field name: add the keys with each new connector (M5: Confluence Cloud, ADO Project wiki).
+- Connector field labels in the UI come from `connectorFields.<kind>.<field>` translations, falling back to a humanised field name: add the keys with each new connector.
 - **M4 follow-ups**:
   - Confluence: page labels and other metadata are not mapped yet (meta only through ADO/Obsidian front matter).
   - Confluence as a mirror does not set sibling order (Confluence orders children itself); Master order is lost there.
@@ -121,8 +128,14 @@ Taken during M4:
   - ADO split pushes: if a later part fails, the earlier parts stay pushed but their mappings are not saved; the next run sees them as edits made in the wiki and rewrites them (correct, but noisy warnings).
   - On a first run, an attachment used by the renderer and the mirror is downloaded twice from the Master.
   - Azure DevOps Server (on-premises) URLs are parsed but untested.
+- **M5 follow-ups**:
+  - Confluence Cloud now allows duplicate page titles in a space; Tolarix still makes mirror titles unique (safe, and links by title keep working). Revisit if the product owner wants exact titles on Cloud.
+  - Scoped Atlassian API tokens (which use `api.atlassian.com/ex/confluence/<cloudId>`) are not supported.
+  - Cloud: folders that hold no pages are not read (the space listing returns pages only); empty folders are not mirrored. Folders are not created on mirrors either (placeholder pages instead).
+  - Cloud browse marks every page and folder as having children (v2 cannot tell cheaply); expanding an empty one shows nothing.
+  - Cloud whiteboards, databases and embeds are skipped.
 - The web bundle's main chunk is ~375 kB (118 kB gzip); the Radix/shadcn shared chunk could be split further if it grows.
 - Playwright has no axe checks yet (M8 a11y pass).
-- **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; still open after M4.
+- **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; still open after M5.
 - Run event attributes are stored as strings (`fmt.Sprint`); the UI shows them as `key=value`, which is enough for now.
 - `runner.Runner` has no global concurrency cap yet (the built-in scheduler in M6 adds the cap of 2).

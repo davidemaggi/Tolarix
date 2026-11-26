@@ -1,0 +1,7 @@
+<h2>Cloud editor content</h2>
+<ac:adf-extension><ac:adf-node type="panel"><ac:adf-attribute key="panel-type">success</ac:adf-attribute><ac:adf-content><p>Deployed <strong>fine</strong>.</p></ac:adf-content></ac:adf-node><ac:adf-fallback><div class="panel"><p>Deployed <strong>fine</strong>.</p></div></ac:adf-fallback></ac:adf-extension>
+<ac:adf-extension><ac:adf-node type="panel"><ac:adf-attribute key="panel-type">custom</ac:adf-attribute><ac:adf-attribute key="panel-icon">:rocket:</ac:adf-attribute><ac:adf-content><p>Custom panel</p></ac:adf-content></ac:adf-node></ac:adf-extension>
+<ac:adf-extension><ac:adf-node type="decision-list"><ac:adf-attribute key="local-id">abc</ac:adf-attribute><ac:adf-node type="decision-item"><ac:adf-attribute key="state">DECIDED</ac:adf-attribute><ac:adf-content>Use Postgres</ac:adf-content></ac:adf-node></ac:adf-node><ac:adf-fallback><ul class="decision-list"><li>Use Postgres</li></ul></ac:adf-fallback></ac:adf-extension>
+<p>A <ac:inline-comment-marker ac:ref="c1">commented</ac:inline-comment-marker> word.</p>
+<p>Smart link: <a href="https://example.atlassian.net/wiki/spaces/DOC/pages/200/Backend+Guide#Getting-Started" data-card-appearance="inline">https://example.atlassian.net/wiki/spaces/DOC/pages/200/Backend+Guide#Getting-Started</a></p>
+<p>Named: <a href="https://example.atlassian.net/wiki/spaces/DOC/pages/200">the backend</a>, outside: <a href="https://example.com/x">site</a></p>
