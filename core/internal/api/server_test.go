@@ -49,8 +49,20 @@ func TestWebModeServesUIAndAPI404(t *testing.T) {
 	if rr.Code != 404 || !strings.Contains(rr.Body.String(), `"code":"not_found"`) {
 		t.Fatalf("api 404: code=%d body=%s", rr.Code, rr.Body)
 	}
-	if rr.Header().Get("X-Content-Type-Options") != "nosniff" {
-		t.Error("security headers missing")
+	for name, want := range map[string]string{
+		"X-Content-Type-Options":     "nosniff",
+		"X-Frame-Options":            "DENY",
+		"Referrer-Policy":            "no-referrer",
+		"Cross-Origin-Opener-Policy": "same-origin",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+	for _, name := range []string{"Content-Security-Policy", "Permissions-Policy"} {
+		if rr.Header().Get(name) == "" {
+			t.Errorf("%s missing", name)
+		}
 	}
 }
 

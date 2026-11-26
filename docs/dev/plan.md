@@ -16,18 +16,18 @@ The original product brief is in [brief.md](brief.md).
 | 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | done | `develop` |
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | done | `develop` |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | done | `develop` |
-| 7 | Tauri desktop app with Go sidecar, installers | **done, awaiting review** | `develop` |
-| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | | |
+| 7 | Tauri desktop app with Go sidecar, installers | done | `develop` |
+| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | **done, awaiting review** (v1.0.0 not tagged yet) | `develop` |
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
 ### Where we left off (2026-11-26)
 
-- M6 was approved ("vai", 2026-11-26). M7 is committed on `develop` (not pushed). Start the next session by asking for the M7 review and approval to begin M8.
-- Defaults chosen in M2–M7 that are awaiting review are listed under "Taken during M2/…/M7" below. How each wiki is mapped: [connectors.md](connectors.md).
-- M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is the first thing to do with the product owner.
-- M7 was smoke-tested on macOS (Apple silicon, debug bundle): server start, keychain key shared with the CLI, single instance, server stop when the app is killed. Windows and Linux builds have only been set up in CI (`desktop.yml`), not run yet: the first CI run on `main` (or a manual dispatch) is their first build.
-- **Next: M8.** Docs (incl. external scheduling guide), hardening, a11y pass, release.
+- M7 was approved ("vai", 2026-11-26). M8 is committed on `develop` (not pushed). Start the next session by asking for the M8 review.
+- **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
+- Defaults chosen in M2–M8 that are awaiting review are listed under "Taken during M2/…/M8" below. How each wiki is mapped: [connectors.md](connectors.md).
+- M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. **A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is still the first thing to do with the product owner, ideally before tagging v1.0.0.**
+- Windows and Linux desktop builds have only been set up in CI (`desktop.yml`), not run yet.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -126,10 +126,19 @@ Taken during M7:
 - **Shared data dir**: the desktop app passes no data dir, so it and the CLI use the same default folder (and `TOLARIX_DATA_DIR` still applies). Server log: the OS app log folder (`~/Library/Logs/io.github.davidemaggi.tolarix/server.log` on macOS), moved to `server.log.1` past 5 MB.
 - **Secret key in the OS keychain** (go-keyring: macOS Keychain, Windows Credential Manager, Secret Service on Linux): only a *new* key, and only when `TOLARIX_SECRET_KEY_STORE=keychain` (the desktop app sets it). The key goes to service `Tolarix`, account `secret-key:<absolute data dir>`, and a marker file `secret.key.keychain` (no secret in it) is written to the data dir, so the CLI finds the key without any setting. Without the marker the keychain is never touched (Docker, CI, an existing `secret.key`). If the keychain fails, the key goes to `secret.key` and the log says why. Order: `TOLARIX_SECRET_KEY` → `secret.key` → marker/keychain → generate. A marker whose keychain entry is gone is an error that explains how to recover (no silent new key: existing secrets would become unreadable).
 - **Identifier** `io.github.davidemaggi.tolarix`; app version from `desktop/src-tauri/Cargo.toml`; icons generated from `desktop/icons/icon.svg` (`pnpm --filter desktop icons`).
-- **Installers** (`.github/workflows/desktop.yml`, tauri-action): macOS arm64 + x64 (`.dmg`), Windows x64 (`.msi`, NSIS `.exe`), Linux x64 (`.deb`, `.rpm`, `.AppImage`). Manual dispatch, pushes to `main`, tags `v*` (draft release). Unsigned in v1. `ci.yml` gains a `desktop` job (cargo fmt, clippy, test).
+- **Installers** (`.github/workflows/desktop.yml`, tauri-action): macOS arm64 + x64 (`.dmg`), Windows x64 (`.msi`, NSIS `.exe`), Linux x64 (`.deb`, `.rpm`, `.AppImage`). Manual dispatch and pushes to `main`; on tags `release.yml` calls it (see "Taken during M8"). Unsigned in v1. `ci.yml` gains a `desktop` job (cargo fmt, clippy, test).
+
+Taken during M8:
+- **Docs** (English, in `docs/`): `user-guide.md` (connections with permissions and token scopes, flows, schedules, run reports, warnings, conversion limits per format pair, CLI and exit codes), `admin-guide.md` (Docker, first sign-in, password reset, configuration, data folder, secret key, backup/restore, upgrades, reverse proxy/HTTPS, draw.io, systemd service, desktop app, troubleshooting), `scheduling.md` (cron, systemd timer, launchd, Task Scheduler GUI/`schtasks`/PowerShell, Docker, Kubernetes CronJob, lock and claims, built-in switch) and the Italian user guide `it/guida-utente.md`. The developer guide gained Architecture, Tests and Releasing sections. `CHANGELOG.md` (Keep a Changelog) starts at 1.0.0.
+- **Release without GoReleaser**: `scripts/package-cli.mjs` reuses `build-core.mjs` to build 6 archives (linux/darwin/windows × amd64/arm64; tar.gz, zip on Windows, with README and LICENSE) plus `SHA256SUMS`. `release.yml` (tags `v*.*.*`) checks that tag, `Cargo.toml` and changelog agree, creates **one draft release** (notes = the changelog section), then fills it from three jobs: CLI archives, the multi-arch image (`ghcr.io/<owner>/tolarix`: `X.Y.Z`, `X.Y`, `X`, `latest`) and the desktop installers (`desktop.yml` became reusable through `workflow_call` with the draft's id; it no longer reacts to tags itself, so two workflows never race to create the release). Publishing the draft stays manual.
+- **Dockerfile** builds on the native platform and cross-compiles (`--platform=$BUILDPLATFORM`, `GOOS/GOARCH` from `TARGETOS/TARGETARCH`): multi-arch builds need no QEMU.
+- **Versions**: the desktop app is 1.0.0 (`Cargo.toml`); the CLI/server version comes from the tag (`TOLARIX_VERSION`); `web/package.json` stays private 0.0.0 (not published).
+- **Hardening** (security review): Go 1.27.4 (fixes GO-2026-6859 in net/http); the database file is created 0600 before SQLite opens it (the WAL inherits the mode); Obsidian names reserved on Windows (`CON`, `NUL`, `COM1`, `LPT1`, … also with an extension) get a `_` added; new headers `Cross-Origin-Opener-Policy: same-origin` and `Permissions-Policy` (camera, microphone, geolocation, payment, usb off); HTTP client errors redact passwords in URLs. Reviewed and kept: session tokens (stored as sha256), login rate limit, 1 MB body limit, strict JSON decoding, CSP, the Obsidian path guard, data dir 0700.
+- **Dependency scanning in CI** (job `security`): `pnpm audit --prod --audit-level high` and `govulncheck -mode=binary` on the built binary (source mode cannot type-check Go 1.27 yet).
+- **Accessibility**: `@axe-core/playwright` checks WCAG 2.0/2.1 A+AA and 2.2 AA at every step of the e2e flow, and the dashboard and settings in both themes. Fixes: visible text is now part of every accessible name (language switcher, weekday toggles, "Run now: <flow>" / "Dry-run: <flow>" buttons instead of different `aria-label`s).
 
 ### Technical choices
-- CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
+- CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. CLI archives built by `scripts/package-cli.mjs` in `release.yml` (GoReleaser was planned, not needed).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
 - Passwords argon2id; server-side sessions in SQLite; CSRF synchronizer token per session (from `GET /auth/session`), sent as `X-CSRF-Token`.
 - Web data layer: openapi-fetch + TanStack Query; generated types in `web/src/api/schema.gen.ts`. Routes other than the dashboard are lazy-loaded.
@@ -158,7 +167,6 @@ Taken during M7:
   - Cloud browse marks every page and folder as having children (v2 cannot tell cheaply); expanding an empty one shows nothing.
   - Cloud whiteboards, databases and embeds are skipped.
 - The web bundle's main chunk is ~375 kB (118 kB gzip); the Radix/shadcn shared chunk could be split further if it grows.
-- Playwright has no axe checks yet (M8 a11y pass).
 - **Known limitation, swaps**: if two mirrored pages exchange places in one Master change (A takes B's path and B takes A's), both moves are reported as conflicts on every run. Fix: move one of them to a temporary key first (engine `apply`). Rare; still open after M5.
 - Run event attributes are stored as strings (`fmt.Sprint`); the UI shows them as `key=value`, which is enough for now.
 - **M6 follow-ups**:
@@ -169,3 +177,9 @@ Taken during M7:
   - Windows and Linux desktop builds have not been launched on a real machine yet.
   - On Linux without a Secret Service (no GNOME Keyring/KWallet), the key falls back to `secret.key` with a warning.
   - The desktop app has no menu or tray; closing the window quits the app and stops the built-in scheduler (by design for v1: run `tolarix serve` or `run-due` for always-on schedules).
+- **M8 follow-ups**:
+  - `release.yml` and the reusable `desktop.yml` have not run yet; check the first draft release carefully (archives, image tags, installers attached to the same draft).
+  - Secret key rotation is not supported (documented in the admin guide).
+  - govulncheck runs in binary mode until it supports Go 1.27 source; switch back to `govulncheck ./...` then (it also reports unreachable vulnerable code less noisily).
+  - The Italian user guide must be kept in step with the English one by hand.
+  - `SECURITY.md` and the admin guide point to GitHub's private vulnerability reporting, which must be enabled in the repository settings (Settings → Code security).

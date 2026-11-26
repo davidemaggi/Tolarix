@@ -43,7 +43,7 @@ describe("language switcher", () => {
   it("switches to Italian, persists the choice and sets <html lang>", async () => {
     const user = userEvent.setup();
     renderApp();
-    await user.click(await screen.findByRole("button", { name: "Change language" }));
+    await user.click(await screen.findByRole("button", { name: /Change language/ }));
     await user.click(await screen.findByRole("menuitemradio", { name: "Italiano" }));
 
     expect(

@@ -19,8 +19,10 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={t("language.toggle")}>
+        {/* The visible code must be part of the accessible name (WCAG 2.5.3). */}
+        <Button variant="ghost" size="sm">
           <Languages aria-hidden="true" />
+          <span className="sr-only">{t("language.toggle")}: </span>
           <span className="uppercase">{current}</span>
         </Button>
       </DropdownMenuTrigger>

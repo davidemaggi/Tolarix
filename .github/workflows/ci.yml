@@ -136,6 +136,30 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
+  security:
+    name: Known vulnerabilities (govulncheck, pnpm audit)
+    needs: [web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - run: pnpm audit --prod --audit-level high
+      - uses: actions/download-artifact@v4
+        with:
+          name: webui-dist
+          path: core/internal/webui/dist
+      - run: node scripts/build-core.mjs
+      # Binary mode: source mode cannot type-check Go 1.27 code yet.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest -mode=binary bin/tolarix
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest

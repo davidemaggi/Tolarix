@@ -46,7 +46,7 @@ describe("dashboard", () => {
     expect(within(card).getByText("Succeeded")).toBeInTheDocument();
     expect(within(card).getByText(/3 created/)).toBeInTheDocument();
 
-    await user.click(within(card).getByRole("button", { name: "Dry-run Handbook" }));
+    await user.click(within(card).getByRole("button", { name: "Dry-run: Handbook" }));
     expect(calls.find((c) => c.method === "POST")).toMatchObject({
       path: "/flows/f1/runs",
       body: { dryRun: true },

@@ -21,6 +21,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -59,11 +60,20 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	msg := fmt.Sprintf("%s %s: %d %s", e.Method, e.URL, e.Status, http.StatusText(e.Status))
+	msg := fmt.Sprintf("%s %s: %d %s", e.Method, redactURL(e.URL), e.Status, http.StatusText(e.Status))
 	if e.Message != "" {
 		msg += ": " + e.Message
 	}
 	return msg
+}
+
+// redactURL hides a password in the URL (https://user:xxxxx@host) so error
+// messages, logs and run reports never carry it.
+func redactURL(s string) string {
+	if u, err := url.Parse(s); err == nil && u.User != nil {
+		return u.Redacted()
+	}
+	return s
 }
 
 // StatusOf returns the HTTP status of an *Error in err's chain, or 0.

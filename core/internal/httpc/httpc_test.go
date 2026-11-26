@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -109,5 +110,12 @@ func TestHTMLSignInPageIsAnAuthError(t *testing.T) {
 	})
 	if err := c.Get(context.Background(), "/x", nil); StatusOf(err) != http.StatusUnauthorized {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestErrorHidesURLPassword(t *testing.T) {
+	e := &Error{Method: "GET", URL: "https://me:s3cret@wiki.example/rest/api", Status: 404}
+	if strings.Contains(e.Error(), "s3cret") {
+		t.Fatalf("password in error: %s", e)
 	}
 }

@@ -13,17 +13,11 @@ links, images and attachments included — on a schedule or with one click.
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 ![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Status](https://img.shields.io/badge/status-early%20development-orange)
+![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)
 
-[Why](#-why-tolarix) · [Features](#-features) · [How it works](#-how-it-works) · [Formats](#-supported-wikis) · [Roadmap](#-roadmap) · [Build](#-build-from-source)
+[Why](#-why-tolarix) · [Features](#-features) · [Install](#-install) · [Docs](#-documentation) · [Formats](#-supported-wikis) · [Roadmap](#-roadmap) · [Build](#-build-from-source)
 
 </div>
-
-> [!WARNING]
-> **Tolarix is in early development.** The sync engine works and already
-> syncs Obsidian vaults from the CLI; the web app and the other wikis are
-> coming. Star or watch the repo to follow along; the
-> [roadmap](#-roadmap) shows what lands next.
 
 ---
 
@@ -61,6 +55,37 @@ format.
 
 All three are the same single Go binary sharing the same SQLite database.
 
+## 📦 Install
+
+**Docker** (a team server with the web interface):
+
+```sh
+docker run -d --name tolarix -p 8080:8080 -v tolarix-data:/data ghcr.io/davidemaggi/tolarix:1
+docker logs tolarix        # the one-time admin password
+```
+
+Then open http://localhost:8080. Compose file, HTTPS, backups and upgrades: [admin guide](docs/admin-guide.md).
+
+**Desktop app**: download the installer for Windows, macOS or Linux from the
+[releases page](https://github.com/davidemaggi/Tolarix/releases).
+
+> [!NOTE]
+> The v1 installers are not signed. On macOS, open the app the first time with
+> right-click → **Open**. On Windows, choose **More info → Run anyway** in SmartScreen.
+
+**Command line**: download the `tolarix` archive for your platform from the same
+page, check it against `SHA256SUMS`, and put the binary on your PATH.
+
+## 📖 Documentation
+
+| Guide | For |
+|---|---|
+| [User guide](docs/user-guide.md) · [Guida utente (italiano)](docs/it/guida-utente.md) | connecting wikis, flows, schedules, run reports, conversion limits, CLI |
+| [Admin guide](docs/admin-guide.md) | Docker, first sign-in, password reset, secret key, backup, upgrades, HTTPS |
+| [Scheduling](docs/scheduling.md) | cron, systemd, launchd, Windows Task Scheduler, Docker, Kubernetes |
+| [Developer guide](docs/dev/README.md) | architecture, setup, tests, adding a connector, releasing |
+| [Changelog](CHANGELOG.md) | what changed in each version |
+
 ## ⚙️ How it works
 
 ```mermaid
@@ -84,8 +109,8 @@ new wiki means writing one connector; the sync engine doesn't change.
 | Obsidian vault | ✅ | ✅ | ✅ works |
 | Confluence Data Center / Server | ✅ | ✅ | ✅ works (M4) |
 | Azure DevOps — Code wiki | ✅ | ✅ | ✅ works (M4) |
-| Confluence Cloud | ✅ | ✅ | ✅ works (M5, in review) |
-| Azure DevOps — Project wiki | ✅ | ✅ | ✅ works (M5, in review) |
+| Confluence Cloud | ✅ | ✅ | ✅ works (M5) |
+| Azure DevOps — Project wiki | ✅ | ✅ | ✅ works (M5) |
 
 ## 🗺️ Roadmap
 
@@ -95,8 +120,8 @@ new wiki means writing one connector; the sync engine doesn't change.
 - [x] **M4 · Priority connectors.** Confluence Data Center / Server and Azure DevOps Code wiki, draw.io → PNG
 - [x] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
 - [x] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
-- [x] **M7 · Desktop app.** Installers for Windows, macOS and Linux (in review)
-- [ ] **M8 · v1.0.** Docs, hardening, accessibility pass, release
+- [x] **M7 · Desktop app.** Installers for Windows, macOS and Linux
+- [x] **M8 · v1.0.** Docs, hardening, accessibility pass, release (in review)
 
 Details and decisions: [docs/dev/plan.md](docs/dev/plan.md).
 
@@ -112,7 +137,7 @@ pnpm build                               # web UI + ./bin/tolarix
 ./bin/tolarix serve --data-dir ./data    # → http://localhost:8080
 ```
 
-### Try it: mirror one Obsidian vault into another
+### Try it from the command line: mirror one Obsidian vault into another
 
 ```sh
 # Describe your vaults and the flow (see docs/examples/flows.example.yaml)

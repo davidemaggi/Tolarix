@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/url"
+	"os"
 	"path/filepath"
 
 	"github.com/pressly/goose/v3"
@@ -31,6 +32,9 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Store, error) {
 	if log == nil {
 		log = slog.Default()
 	}
+	if err := createPrivate(path); err != nil {
+		return nil, fmt.Errorf("create database %s: %w", path, err)
+	}
 	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, fmt.Errorf("open database %s: %w", path, err)
@@ -45,6 +49,23 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// createPrivate creates an empty database file readable by its owner only
+// (it holds the encrypted secrets and the admin password hash). SQLite gives
+// the -wal and -shm files the same permissions. An existing file is left as is.
+func createPrivate(path string) error {
+	if path == "" || path == ":memory:" {
+		return nil
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // the configured database path
+	if errors.Is(err, fs.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // dsn builds a modernc.org/sqlite DSN. Pragmas are applied to every pooled

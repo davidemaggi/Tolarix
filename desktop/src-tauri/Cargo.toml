@@ -1,6 +1,6 @@
 [package]
 name = "tolarix-desktop"
-version = "0.1.0"
+version = "1.0.0"
 description = "Tolarix desktop app: runs the Tolarix server as a sidecar and shows its UI"
 authors = ["Davide Maggi"]
 license = "GPL-3.0-only"

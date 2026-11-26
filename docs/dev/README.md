@@ -1,7 +1,48 @@
-# Developer guide — setting up a machine
+# Developer guide
 
-Everything needed to pick the project up on a new PC. Status and decisions:
-[plan.md](plan.md). Original scope: [brief.md](brief.md).
+Everything needed to pick the project up on a new PC: architecture, setup,
+tests, conventions and how to release. Status and decisions: [plan.md](plan.md).
+Original scope: [brief.md](brief.md). User-facing docs: [user guide](../user-guide.md),
+[admin guide](../admin-guide.md), [scheduling](../scheduling.md).
+
+## Architecture
+
+```
+tolarix (one Go binary)
+├── api        chi + OpenAPI: auth, CSRF, SSE logs, embedded React UI (webui)   ◀── browser, Tauri window
+├── cli        cobra: serve, flow run, run-due, runs, import, admin             ◀── shell, cron, Task Scheduler
+├── scheduler  due flows + schedule claims (built-in, shared with run-due)
+├── runner     per-flow lock + heartbeat, run row, live events, report
+│   └── engine     plan + apply: scope, renderers, moves, delete policy, dry-run
+│       ├── connectors   Source / Target / Session: obsidian, confluence (v1, v2), azuredevops
+│       └── render       draw.io → PNG
+├── store      SQLite + goose migrations: connections, flows, mappings, runs, locks
+└── secrets    AES-GCM; key from env, secret.key or the OS keychain
+```
+
+- **One binary, three faces.** `tolarix serve` hosts the API, the embedded web UI and
+  the built-in scheduler (web mode for Docker, desktop mode for the Tauri sidecar).
+  Every other command is a CLI that opens the same SQLite database directly; no
+  server is needed. The desktop app (`desktop/`) is a thin Tauri shell around
+  `serve --mode desktop`.
+- **Canonical model.** Every connector converts its wiki to and from one page tree
+  (`internal/model`): CommonMark + GFM bodies, `tolarix://page/<id>` and
+  `tolarix://att/<sha256>` links, callouts, Mermaid fences. The engine only sees
+  this model, so a new wiki is one new connector.
+- **Engine.** Reads a snapshot of the Master, applies the scope, runs the
+  renderers, then for each Mirror plans the operations (create, update, move,
+  archive/delete/keep, conflict) from the mapping table and content hashes, and
+  applies them, saving each mapping as it goes. Dry-runs stop after the plan.
+- **Runner and locking.** Every run, from any entry point, goes through
+  `internal/runner`: it takes the per-flow lock in the database (heartbeat, stale
+  after 2 minutes), records the run, streams events to `run_events` (the UI follows
+  them over SSE) and stores the report.
+- **Scheduler.** `internal/scheduler` decides which flows are due (schedule +
+  anchor) and claims each scheduled time with one conditional UPDATE, so the
+  built-in scheduler and any `run-due` process never start the same time twice.
+- **Security boundaries.** Secrets are `secrets.String` everywhere (they redact
+  themselves) and are encrypted in the database. The API never returns them. The web
+  UI talks to the API only; desktop mode accepts only 127.0.0.1 and a launch token.
 
 ## Prerequisites
 
@@ -151,12 +192,16 @@ web/                      React + Vite + TS + Tailwind v4 + shadcn/ui
   src/i18n/locales/       en.json, it.json — a test fails if their keys differ
   src/test/               test helpers: renderApp, a fake API (mockApi) and a fake EventSource
   e2e/                    Playwright tests against the real binary
+  e2e/a11y.ts             axe checks (WCAG 2.2 AA) called at every step of the e2e flow
 desktop/                  Tauri v2 shell: starts the tolarix sidecar and shows its UI
   splash/                 static page shown while the server starts (and its startup errors)
   scripts/sidecar.mjs     builds the sidecar into src-tauri/binaries/tolarix-<triple> (Tauri externalBin)
   src-tauri/src/          lib.rs (window, navigation, single instance), sidecar.rs (start/stop, ready line, token)
 deploy/                   Dockerfile, docker-compose.yml
 scripts/build-core.mjs    cross-platform go build with version ldflags (TOLARIX_OUT overrides the output)
+scripts/package-cli.mjs   release archives for 6 platforms + SHA256SUMS into ./dist (used by release.yml)
+.github/workflows/        ci.yml (PRs and main), desktop.yml (installers), release.yml (tags v*)
+docs/                     user guide (en, it/), admin guide, scheduling guide
 docs/dev/                 this guide, plan + status, design notes
 ```
 
@@ -192,11 +237,55 @@ callouts, Mermaid) are documented at the top of `internal/model/model.go`.
 
 The engine needs no change. Its tests use in-memory fakes (`internal/engine/fakes_test.go`).
 
+## Tests
+
+| What | Where | Run |
+|---|---|---|
+| Go unit + connector golden tests + engine end-to-end with fakes | `core/**/*_test.go` | `cd core && go test ./...` |
+| Web components and pages (Vitest, jsdom, fake API) | `web/src/**/*.test.tsx` | `cd web && pnpm test` |
+| Browser end to end + accessibility (Playwright + axe, real binary) | `web/e2e/` | `pnpm --filter web build && node scripts/build-core.mjs && cd web && TOLARIX_BIN=$PWD/../bin/tolarix pnpm test:e2e` |
+| Desktop shell (sidecar start/stop, URL rules) | `desktop/src-tauri/src/*.rs` | `cd desktop/src-tauri && cargo test` |
+
+Before asking for review, the full check is:
+
+```sh
+cd core && gofmt -l . && go vet ./... && golangci-lint run ./... && go test ./...
+cd web && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+cd desktop/src-tauri && cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked
+```
+
+The e2e test calls `expectAccessible(page, "<where>")` after each screen. A new
+screen or dialog should get a call too; fix violations instead of disabling rules.
+
+CI (`ci.yml`) also runs `pnpm audit --prod` and `govulncheck` on the built binary
+(job `security`).
+
 ## Golden files
 
 ```sh
 cd core && go test ./... -update   # rewrite golden files, then review the diff with git before committing
 ```
+
+## Releasing
+
+1. On `develop`: update `CHANGELOG.md` (a `## [X.Y.Z] - date` section) and the
+   version in `desktop/src-tauri/Cargo.toml` (then `cargo update -p tolarix-desktop`
+   in `desktop/src-tauri` to refresh `Cargo.lock`). Run the full check.
+2. Merge `develop` into `main`, then tag on `main`: `git tag -a vX.Y.Z -m "Tolarix X.Y.Z"`
+   and `git push origin vX.Y.Z`.
+3. `release.yml` checks that the tag, `Cargo.toml` and the changelog agree, creates a
+   **draft** release with the changelog section as notes, and fills it: CLI archives
+   + `SHA256SUMS` (`scripts/package-cli.mjs`), the multi-arch image on
+   `ghcr.io/davidemaggi/tolarix` (`X.Y.Z`, `X.Y`, `X`, `latest`) and the desktop
+   installers (`desktop.yml`, called with the draft's id).
+4. Check the draft (download an archive, `docker run ghcr.io/davidemaggi/tolarix:X.Y.Z version`)
+   and publish it. The image is pushed when the job runs, before the draft is published.
+5. The first time, make the ghcr package public (GitHub → Packages → tolarix →
+   Package settings → Change visibility).
+
+Try the packaging locally with `pnpm --filter web build && TOLARIX_VERSION=0.0.0-test node scripts/package-cli.mjs`
+(`dist/` is git-ignored) and the image with
+`docker buildx build -f deploy/Dockerfile --platform linux/amd64,linux/arm64 .`.
 
 ## Conventions
 
@@ -223,4 +312,14 @@ cd core && go test ./... -update   # rewrite golden files, then review the diff 
   `src-tauri/binaries/tolarix-<host triple>` like CI does).
 - Running the desktop app from a debug bundle uses your real data dir and keychain; set `TOLARIX_DATA_DIR` to a temp folder
   to try it, and delete the keychain entry afterwards (`security delete-generic-password -s Tolarix -a secret-key:<dir>` on macOS).
+- `govulncheck ./...` (source mode) fails on Go 1.27 code because its type checker does not support 1.27 yet.
+  CI scans the built binary instead (`govulncheck -mode=binary bin/tolarix`), which needs no type checking.
+- axe's `label-content-name-mismatch`: a control's accessible name must contain its visible text. Do not put
+  an `aria-label` on a button that shows different text; use visible text plus `sr-only` spans
+  (see the weekday toggles in `schedule-editor.tsx` and `language-switcher.tsx`).
+- Button and badge hovers darken (`hover:brightness-90`) instead of the shadcn default `hover:bg-primary/90`:
+  the translucent variant lightens the teal to 4.28:1 against white text, and axe flags it whenever the
+  mouse is still over a button after a click.
+- Radix selects leave the page `aria-hidden` while their list is open; in e2e tests, wait for the listbox
+  to close (`expect(page.getByRole("listbox")).toHaveCount(0)`) before running axe.
 - File names with spaces in fixtures: quote them in shell loops (`find -print0 | while read -d ''`), and never `cat` an unquoted name that might be `-`.

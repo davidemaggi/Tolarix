@@ -1,9 +1,11 @@
 # Tolarix server image (web mode).
 # Build from the repository root:
 #   docker build -f deploy/Dockerfile -t tolarix --build-arg VERSION=1.0.0 .
+# Multi-arch (the build stages run natively and cross-compile, no emulation):
+#   docker buildx build -f deploy/Dockerfile --platform linux/amd64,linux/arm64 .
 
 # ---- Web UI ----
-FROM node:22-bookworm-slim AS web
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -14,7 +16,7 @@ COPY web/ web/
 RUN mkdir -p core/internal/webui/dist && pnpm --filter web build
 
 # ---- Go binary ----
-FROM golang:1.27-bookworm AS core
+FROM --platform=$BUILDPLATFORM golang:1.27-bookworm AS core
 WORKDIR /src/core
 COPY core/go.mod core/go.sum ./
 RUN go mod download
@@ -23,7 +25,9 @@ COPY --from=web /src/core/internal/webui/dist/ internal/webui/dist/
 ARG VERSION=dev
 ARG COMMIT=""
 ARG DATE=""
-RUN CGO_ENABLED=0 go build -trimpath \
+ARG TARGETOS=linux
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
       -ldflags "-s -w \
         -X github.com/davidemaggi/tolarix/core/internal/buildinfo.Version=${VERSION} \
         -X github.com/davidemaggi/tolarix/core/internal/buildinfo.Commit=${COMMIT} \

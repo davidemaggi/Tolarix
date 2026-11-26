@@ -202,7 +202,6 @@ export function ScheduleEditor({
                                 key={w}
                                 type="button"
                                 aria-pressed={on}
-                                aria-label={longDays[i]}
                                 onClick={() =>
                                   set({
                                     days: on
@@ -217,7 +216,10 @@ export function ScheduleEditor({
                                     : "bg-background hover:bg-accent",
                                 )}
                               >
-                                {shortDays[i]}
+                                {/* The name comes from the full day name; the
+                                    abbreviation is only visual. */}
+                                <span aria-hidden="true">{shortDays[i]}</span>
+                                <span className="sr-only">{longDays[i]}</span>
                               </button>
                             );
                           })}

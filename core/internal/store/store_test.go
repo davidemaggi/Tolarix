@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -103,5 +105,21 @@ func TestSingleAdminRow(t *testing.T) {
 	if _, err := s.DB.ExecContext(ctx,
 		`INSERT INTO admin_user (id, password_hash, updated_at) VALUES (2, 'h', 'now')`); err == nil {
 		t.Fatal("a second admin row must be rejected")
+	}
+}
+
+func TestNewDatabaseIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permissions")
+	}
+	_, path := openTemp(t)
+	for _, p := range []string{path, path + "-wal"} {
+		st, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o600 {
+			t.Errorf("%s has mode %v, want 0600", filepath.Base(p), st.Mode().Perm())
+		}
 	}
 }
