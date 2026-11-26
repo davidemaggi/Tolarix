@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/davidemaggi/tolarix/core/internal/connectors/filetree"
 )
 
 // Page file names follow the Azure DevOps wiki convention: a space in the
@@ -35,6 +37,11 @@ func EncodeName(title string) string {
 	}
 	if strings.HasSuffix(s, ".") {
 		s = s[:len(s)-1] + "%2E"
+	}
+	// Windows refuses device names ("CON", "nul.md") in a clone or an export:
+	// encode the first letter, which still decodes to the same title.
+	if filetree.WindowsReserved(s) {
+		s = fmt.Sprintf("%%%02X", s[0]) + s[1:]
 	}
 	return s
 }

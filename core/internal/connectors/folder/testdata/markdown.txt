@@ -1,0 +1,38 @@
+== Mirror/Guide/Getting Started.md ==
+---
+title: Getting Started
+---
+## Install
+
+<img src="../assets/shot.png" alt="shot.png" width="300">
+
+Back to [Guide](index.md), or [here](#install).
+== Mirror/Guide/index.md ==
+---
+title: Guide
+---
+# Guide
+
+<!-- tolarix:toc -->
+
+See [Getting Started > Install](Getting%20Started.md#install) and [Notes](../Other/Notes.md).
+
+```mermaid
+graph TD
+```
+== Mirror/Other/Notes.md ==
+---
+title: Notes
+tags:
+  - a
+---
+Some notes.
+== Mirror/README.md ==
+mine
+== Mirror/What is it-.md ==
+---
+title: What is it?
+---
+Questions.
+== Mirror/assets/shot.png ==
+PNG-shot

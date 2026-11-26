@@ -73,7 +73,7 @@ func TestParseProjectURL(t *testing.T) {
 }
 
 func TestNames(t *testing.T) {
-	for _, title := range []string{"Getting Started", "Q&A: what? why*", "50% off - now", "a/b\\c", ".hidden.", "C# <tips> | \"quotes\""} {
+	for _, title := range []string{"Getting Started", "Q&A: what? why*", "50% off - now", "a/b\\c", ".hidden.", "C# <tips> | \"quotes\"", "CON", "nul"} {
 		enc := EncodeName(title)
 		if strings.ContainsAny(enc, " /\\:*?<>|\"#") {
 			t.Errorf("EncodeName(%q) = %q keeps an unsafe character", title, enc)
@@ -84,6 +84,9 @@ func TestNames(t *testing.T) {
 	}
 	if got := EncodeName("Getting Started - Part 1"); got != "Getting-Started-%2D-Part-1" {
 		t.Errorf("EncodeName = %q", got)
+	}
+	if got := EncodeName("Aux"); got != "%41ux" {
+		t.Errorf("EncodeName(Aux) = %q, want a name Windows accepts", got)
 	}
 	if got := slug("Install & Run (v2)!"); got != "install-%26-run-%28v2%29%21" {
 		t.Errorf("slug = %q", got)

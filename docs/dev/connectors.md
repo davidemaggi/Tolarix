@@ -159,6 +159,54 @@ gets "create it in Azure DevOps (Overview → Wiki → Create project wiki)"; a 
 address points to the Code wiki kind. Conventions, dialect and mirror behaviour are the
 Code wiki's.
 
+## File-based mirrors (`internal/connectors/filetree`)
+
+Shared by the ADO writer and the local folder exports.
+- `Tree` is a virtual copy of the target folder: the blob id of every file at load
+  (`Store.Load`), and the entries written since. `Put` with unchanged content is a
+  no-op; attachments are spooled to a temp dir (`PutReader`).
+- `Diff` gives deletes, then renames (a file moved unchanged), then adds/edits, sorted
+  by path. `Commit` hands them to `Store.Apply` in one go.
+- Hashes are git blob ids (`BlobID`) for every store, so edits made on the mirror are
+  detected the same way everywhere (`mirror-edited`).
+- `Session` implements `connectors.Session` + `Buffering` over a `Format`
+  (`Layout`, `Encode`, `Hidden`, `Finalize`). `Finalize` runs before the commit
+  (ADO `.order` files, the GitHub sidebar). `Finish(commit=false)` writes nothing.
+- Stores: `gitStore` (ADO, one push) and `Dir` (local disk: atomic writes, prunes
+  emptied folders but never the target folder, ignores `.git` and symbolic links).
+  `InRoot` rejects any change outside the target folder.
+
+## Local folder exports (`folder-azure-devops`, `folder-github-wiki`, `folder-markdown`)
+
+Code: `internal/connectors/folder`. Target only (no `Source`). Config `path` is an
+existing, writable folder (`Test` checks it with a temp file); location `folder` is
+relative to it (no `..`). Pages deleted in the Master are archived under
+`<target>/Archived/`.
+
+- **Azure DevOps wiki**: `azuredevops.NewFormat()` on a `filetree.Dir`, so the files
+  match the Code wiki mirror byte for byte (names, `.order`, `.attachments/`, dialect).
+- **GitHub wiki**: GitHub serves `/wiki/<Name>` whatever the folder, so names are
+  unique across the export (case-insensitive). `GitHubName`: spaces → `-`,
+  `\ / : * ? " < > | # %` dropped, leading/trailing `.`/`_` trimmed, Windows device
+  names get `_`, duplicates `Name-(2)` (warning `renamed`). Children go in a folder
+  named after the parent; placeholders are folders. Links use the bare name
+  (`[t](Getting-Started#install)`); attachments live in `<target>/_attachments/` and
+  are linked by their path from the export folder (the wiki root). Sized images become
+  `<img src alt width height>`. `_Sidebar.md` is written in Master order, starting
+  with a marker comment; a sidebar without the marker is left alone. `_Sidebar.md`,
+  `_Footer.md` and `_attachments/` are hidden from the inventory.
+- **Markdown**: `MarkdownName` keeps spaces and replaces forbidden characters. A leaf
+  is `Name.md`, a page with children `Name/index.md` (`index` is reserved among its
+  children; gaining children is a move). Links are relative, URL-escaped, with `.md`
+  and GitHub-style heading slugs. Attachments go in `<target>/assets/`. A `title`
+  entry is added to the front matter when missing. No page order.
+
+Shared conversion (`encode.go`): page links outside the scope or to folder-only pages
+produce `link-out-of-scope` / `link-to-folder`, attachments not mirrored
+`attachment-not-mirrored`. Bodies stay canonical GFM otherwise: Mermaid fences are
+kept, and the TOC marker stays an invisible HTML comment (neither GitHub nor plain
+Markdown has a TOC macro).
+
 ## Testing
 
 Each HTTP connector has an in-memory fake of the API it uses (`fake_test.go`), built from

@@ -112,6 +112,48 @@ Il progetto deve avere già una wiki di progetto (**Overview → Wiki → Create
 project wiki**). Tolarix scrive nel suo repository nascosto, sul branch
 `wikiMaster`. Per il resto funziona come la wiki di codice.
 
+### Export in una cartella locale
+
+Tre tipi di connessione scrivono un Mirror in una cartella su disco invece che
+in una wiki. Puoi poi fare commit della cartella in un repository, pubblicarla o
+copiarla altrove. Possono essere solo Mirror.
+
+| Tipo | Cosa ottieni |
+|---|---|
+| Local folder: Azure DevOps wiki | Gli stessi file che Tolarix scrive in una wiki di codice Azure DevOps (`Nome.md`, sottopagine in `Nome/`, `.order`, `.attachments/`). Fai push della cartella in un repository e pubblicala come wiki di codice. |
+| Local folder: GitHub wiki | File per una wiki GitHub (clona `<repo>.wiki.git` nella cartella e fai push dopo l'esecuzione). |
+| Local folder: Markdown | Markdown semplice con link relativi, per generatori di siti statici (MkDocs, Docusaurus…), GitLab o la consultazione in un repository. |
+
+| Campo | Valore |
+|---|---|
+| Cartella di export | Una cartella esistente sulla macchina dove gira Tolarix, per esempio `/srv/export`. In Docker, un volume montato e il percorso dentro il container. |
+
+- **Posizione nel Mirror:** *Cartella dentro la cartella di export*. Vuota
+  significa la cartella di export stessa.
+- La cartella deve già esistere ed essere scrivibile; **Prova connessione** lo
+  verifica.
+- Le modifiche vengono scritte tutte insieme alla fine dell'esecuzione. Una
+  simulazione non scrive nulla.
+- I file che Tolarix non gestisce (un `README.md`, una cartella `.git`…) non
+  vengono toccati. Le modifiche fatte alle pagine esportate vengono
+  sovrascritte all'esecuzione successiva, con un avviso.
+- Le pagine eliminate nel Master vengono spostate in `Archived/`, come nelle
+  wiki.
+
+**Wiki GitHub.** GitHub mostra ogni pagina per nome, in qualunque cartella si
+trovi, quindi i nomi delle pagine sono unici in tutto l'export: gli spazi
+diventano `-`, i caratteri che GitHub non ammette vengono tolti e un duplicato
+diventa `-(2)`. Le sottopagine vanno comunque in una cartella con il nome della
+pagina padre. Tolarix scrive `_Sidebar.md` con l'albero delle pagine (nell'ordine
+del Master); una sidebar scritta da te (senza il marcatore di Tolarix sulla
+prima riga) non viene mai sostituita. Gli allegati vanno in `_attachments/`.
+
+**Markdown.** Una pagina è `Nome.md`; una pagina con sottopagine diventa
+`Nome/index.md` accanto a loro. Ogni pagina ha un `title` nel front matter, i
+link sono relativi (`../Altro/Note.md#sezione`) e gli allegati vanno in
+`assets/`. I file semplici non hanno un ordine delle pagine, quindi sono
+ordinate per nome.
+
 ### Segreti
 
 Il campo del token o della password è in sola scrittura. Quando modifichi una

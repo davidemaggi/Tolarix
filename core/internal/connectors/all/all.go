@@ -4,5 +4,6 @@ package all
 import (
 	_ "github.com/davidemaggi/tolarix/core/internal/connectors/azuredevops" // Azure DevOps code wikis
 	_ "github.com/davidemaggi/tolarix/core/internal/connectors/confluence"  // Confluence Data Center / Server
+	_ "github.com/davidemaggi/tolarix/core/internal/connectors/folder"      // local folder exports
 	_ "github.com/davidemaggi/tolarix/core/internal/connectors/obsidian"    // Obsidian vaults
 )

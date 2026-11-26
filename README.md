@@ -111,6 +111,7 @@ new wiki means writing one connector; the sync engine doesn't change.
 | Azure DevOps — Code wiki | ✅ | ✅ | ✅ works (M4) |
 | Confluence Cloud | ✅ | ✅ | ✅ works (M5) |
 | Azure DevOps — Project wiki | ✅ | ✅ | ✅ works (M5) |
+| Local folder (Azure DevOps wiki, GitHub wiki or Markdown layout) | — | ✅ | ✅ works (M9) |
 
 ## 🗺️ Roadmap
 
@@ -121,7 +122,8 @@ new wiki means writing one connector; the sync engine doesn't change.
 - [x] **M5 · More connectors.** Confluence Cloud and Azure DevOps Project wiki
 - [x] **M6 · Scheduling.** Built-in scheduler, human-friendly schedule wizard, `run-due` for external schedulers
 - [x] **M7 · Desktop app.** Installers for Windows, macOS and Linux
-- [x] **M8 · v1.0.** Docs, hardening, accessibility pass, release (in review)
+- [x] **M8 · v1.0.** Docs, hardening, accessibility pass, release
+- [x] **M9 · Local folder exports.** Mirrors written to a folder in the Azure DevOps wiki, GitHub wiki or Markdown layout (in review)
 
 Details and decisions: [docs/dev/plan.md](docs/dev/plan.md).
 

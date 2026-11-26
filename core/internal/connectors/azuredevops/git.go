@@ -2,9 +2,7 @@ package azuredevops
 
 import (
 	"context"
-	"crypto/sha1" //nolint:gosec // git object ids are SHA-1 by definition
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/davidemaggi/tolarix/core/internal/connectors/filetree"
 	"github.com/davidemaggi/tolarix/core/internal/httpc"
 )
 
@@ -24,12 +23,7 @@ const zeroID = "0000000000000000000000000000000000000000"
 var maxPushBytes int64 = 64 << 20
 
 // blobSHA is the git object id of content (what the items API reports).
-func blobSHA(content []byte) string {
-	h := sha1.New() //nolint:gosec // see import
-	fmt.Fprintf(h, "blob %d\x00", len(content))
-	h.Write(content)
-	return hex.EncodeToString(h.Sum(nil))
-}
+func blobSHA(content []byte) string { return filetree.BlobID(content) }
 
 // repoPath turns a folder-relative path into an absolute repository path.
 func repoPath(parts ...string) string {

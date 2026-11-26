@@ -133,7 +133,10 @@
     "azure-devops-code": "A wiki published from a Git repository in Azure DevOps (Services or Server). Tolarix reads and pushes commits through the REST API.",
     "confluence-dc": "A Confluence Data Center or Server space, or a page and everything below it.",
     "azure-devops-project": "The project wiki of an Azure DevOps project (Services or Server). Tolarix reads and pushes commits to its hidden Git repository through the REST API.",
-    "confluence-cloud": "A Confluence Cloud space (atlassian.net), or a page and everything below it."
+    "confluence-cloud": "A Confluence Cloud space (atlassian.net), or a page and everything below it.",
+    "folder-azure-devops": "A folder on this machine, written in the Azure DevOps wiki layout (.order files, .attachments). Commit it to an Azure DevOps wiki repository, or keep it as an export.",
+    "folder-github-wiki": "A folder on this machine, written in the GitHub wiki layout (flat page names, _Sidebar.md). Clone the wiki repository into it and push the result.",
+    "folder-markdown": "A folder on this machine with plain Markdown files and relative links, for static site generators (MkDocs, Docusaurus), GitLab wikis or a repository."
   },
   "connectorFields": {
     "obsidian": {
@@ -186,6 +189,30 @@
       "location": {
         "parent": "Parent page",
         "parentHint": "Title (or numeric id) of the page that mirrored pages go under. Leave it empty to use the connection's page, or the space homepage."
+      }
+    },
+    "folder-azure-devops": {
+      "path": "Export folder",
+      "pathHint": "The folder on this machine to export into, for example /exports/wiki. It must already exist; in Docker it must be a mounted volume.",
+      "location": {
+        "folder": "Folder inside the export folder",
+        "folderHint": "Mirrored pages go into this subfolder. Leave it empty to use the export folder itself. Each run writes all its changes at the end."
+      }
+    },
+    "folder-github-wiki": {
+      "path": "Export folder",
+      "pathHint": "The folder on this machine to export into, for example /exports/wiki. It must already exist; in Docker it must be a mounted volume.",
+      "location": {
+        "folder": "Folder inside the export folder",
+        "folderHint": "Mirrored pages go into this subfolder. Leave it empty to use the export folder itself. Each run writes all its changes at the end."
+      }
+    },
+    "folder-markdown": {
+      "path": "Export folder",
+      "pathHint": "The folder on this machine to export into, for example /exports/wiki. It must already exist; in Docker it must be a mounted volume.",
+      "location": {
+        "folder": "Folder inside the export folder",
+        "folderHint": "Mirrored pages go into this subfolder. Leave it empty to use the export folder itself. Each run writes all its changes at the end."
       }
     }
   },

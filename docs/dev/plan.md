@@ -17,13 +17,14 @@ The original product brief is in [brief.md](brief.md).
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | done | `develop` |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | done | `develop` |
 | 7 | Tauri desktop app with Go sidecar, installers | done | `develop` |
-| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | **done, awaiting review** (v1.0.0 not tagged yet) | `develop` |
+| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | done (v1.0.0 not tagged yet) | `develop` |
+| 9 | Local folder exports (Azure DevOps wiki, GitHub wiki, Markdown), before v1.0.0 | **done, awaiting review** | `develop` |
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
 ### Where we left off (2026-11-26)
 
-- M7 was approved ("vai", 2026-11-26). M8 is committed on `develop` (not pushed). Start the next session by asking for the M8 review.
+- M8 was committed and pushed to `develop` for testing in an environment. The product owner then asked (2026-11-26) for a fix to `scripts/build-core.mjs` on Windows (`go` not on PATH; committed) and for **M9, local folder exports, to ship before v1.0.0**. M9 is committed on `develop` (not pushed). Start the next session by asking for the M9 review.
 - **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
 - Defaults chosen in M2–M8 that are awaiting review are listed under "Taken during M2/…/M8" below. How each wiki is mapped: [connectors.md](connectors.md).
 - M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. **A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is still the first thing to do with the product owner, ideally before tagging v1.0.0.**
@@ -43,6 +44,7 @@ Each milestone ends with tests green and a stop for review before the next one s
 6. **Scheduler** — `robfig/cron/v3` with TZ; schedule model ↔ cron + human sentence (en/it) + next 5 runs, server-side; `run-due`; per-flow built-in schedule switch; schedule wizard.
 7. **Desktop** — Tauri v2, sidecar on 127.0.0.1 port 0 + launch token (ready line `TOLARIX_READY {"port":…}` on stdout), OS keychain for the secret key with file fallback, installers via CI (unsigned in v1).
 8. **Docs + hardening + release** — user/admin/dev guides, `docs/scheduling.md`, Italian user guide, a11y (axe in Playwright), security review, release workflow, v1.0.0.
+9. **Local folder exports (product owner, 2026-11-26)** — a Mirror written to a local folder instead of a wiki, in the Azure DevOps wiki, GitHub wiki or plain Markdown layout. Shared `filetree` package (virtual folder + one-shot apply) used by both the ADO git writer and the disk writer.
 
 ## Decisions log
 
@@ -137,6 +139,16 @@ Taken during M8:
 - **Dependency scanning in CI** (job `security`): `pnpm audit --prod --audit-level high` and `govulncheck -mode=binary` on the built binary (source mode cannot type-check Go 1.27 yet).
 - **Accessibility**: `@axe-core/playwright` checks WCAG 2.0/2.1 A+AA and 2.2 AA at every step of the e2e flow, and the dashboard and settings in both themes. Fixes: visible text is now part of every accessible name (language switcher, weekday toggles, "Run now: <flow>" / "Dry-run: <flow>" buttons instead of different `aria-label`s).
 
+Taken during M9:
+- **Three connector kinds instead of one with a format field**: `folder-azure-devops`, `folder-github-wiki`, `folder-markdown` (package `internal/connectors/folder`). Each has a `path` (the export folder) and the location field `folder`. The UI needed only translations; the format is clear in the connection list. Target-only: `Source` is not implemented, so they cannot be picked as Master.
+- **The folder must exist** (Test fails otherwise, with a hint about Docker volumes): a typo should not create a tree somewhere unexpected. The target folder inside it is created as needed.
+- **`filetree` package**: a virtual copy of the target folder (blob ids at load, entries after writes) and a generic `Session` that turns page operations into one diff applied by a `Store` at `Finish`. The ADO git writer was refactored onto it (`gitStore`, behaviour and golden files unchanged) and the disk writer is `filetree.Dir`. Both are `connectors.Buffering`, so mappings are saved only after the write succeeds.
+- **Disk writes**: every file is written atomically (temp file + rename), folders emptied by a run are removed (never the target folder itself), `.git` folders and symbolic links are ignored, dot files are never inventoried. Hashes are git blob ids, so mirror edits are detected the same way as on ADO.
+- **GitHub wiki layout**: names unique across the export (GitHub addresses pages by name only), spaces → `-`, `\ / : * ? " < > | # %` dropped, duplicates `Name-(2)`; children in a folder of the same name; links by bare name; attachments in `_attachments/`; `_Sidebar.md` generated with a marker first line, never replacing a sidebar without it; sized images become `<img width=…>`.
+- **Markdown layout**: `Name.md`, or `Name/index.md` for pages with children (a leaf gaining children is a move); names keep spaces, forbidden characters replaced; relative links with `.md` and GitHub-style heading slugs; attachments in `assets/`; `title` added to the front matter when missing.
+- **ADO names**: Windows device names (`CON`, `Aux`…) now get their first letter percent-encoded (`%41ux`), so exports open on Windows; the reader decodes it as before. `filetree.WindowsReserved` is shared with Obsidian.
+- **`scripts/build-core.mjs`** looks for Go in the usual install folders when it is not on PATH and explains how to install it otherwise (Windows report, `spawnSync go ENOENT`).
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. CLI archives built by `scripts/package-cli.mjs` in `release.yml` (GoReleaser was planned, not needed).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
@@ -183,3 +195,9 @@ Taken during M8:
   - govulncheck runs in binary mode until it supports Go 1.27 source; switch back to `govulncheck ./...` then (it also reports unreachable vulnerable code less noisily).
   - The Italian user guide must be kept in step with the English one by hand.
   - `SECURITY.md` and the admin guide point to GitHub's private vulnerability reporting, which must be enabled in the repository settings (Settings → Code security).
+- **M9 follow-ups**:
+  - GitHub wiki exports link attachments by their path from the wiki root (`_attachments/x.png`) and pages by bare name; check both on a real GitHub wiki, including pages in subfolders.
+  - GitHub page names are unique only within one export: two flows exporting into the same wiki folder could collide.
+  - The generated `_Sidebar.md` lists the pages placed in the export; pages skipped because of an error in a run still appear in it.
+  - Markdown exports have no page order (sorted by name); a `nav`/`_category_.json` for MkDocs or Docusaurus could carry the Master order later.
+  - The folder must exist on the machine running Tolarix; there is no "pick a folder" dialog in the desktop app yet.

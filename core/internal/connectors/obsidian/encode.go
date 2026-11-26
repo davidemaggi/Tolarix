@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/davidemaggi/tolarix/core/internal/connectors"
+	"github.com/davidemaggi/tolarix/core/internal/connectors/filetree"
 	"github.com/davidemaggi/tolarix/core/internal/convert/frontmatter"
 	"github.com/davidemaggi/tolarix/core/internal/convert/mdscan"
 	"github.com/davidemaggi/tolarix/core/internal/model"
@@ -194,7 +195,7 @@ func sanitizeName(s string) string {
 	if s == "" {
 		s = "Untitled"
 	}
-	if windowsReserved(s) {
+	if filetree.WindowsReserved(s) {
 		// Windows also reserves "CON.anything": mark the part before the dot.
 		if i := strings.IndexByte(s, '.'); i >= 0 {
 			s = s[:i] + "_" + s[i:]
@@ -203,23 +204,6 @@ func sanitizeName(s string) string {
 		}
 	}
 	return s
-}
-
-// windowsReserved reports device names Windows refuses as file names, with
-// or without an extension ("CON", "nul.md", "COM1").
-func windowsReserved(name string) bool {
-	base := strings.ToUpper(strings.TrimSpace(name))
-	if i := strings.IndexByte(base, '.'); i >= 0 {
-		base = strings.TrimSpace(base[:i])
-	}
-	switch base {
-	case "CON", "PRN", "AUX", "NUL":
-		return true
-	}
-	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) {
-		return base[3] >= '1' && base[3] <= '9'
-	}
-	return false
 }
 
 func sanitizeFileName(s string) string {

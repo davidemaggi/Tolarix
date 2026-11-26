@@ -133,7 +133,10 @@
     "azure-devops-code": "Una wiki pubblicata da un repository Git in Azure DevOps (Services o Server). Tolarix legge e invia commit tramite la REST API.",
     "confluence-dc": "Uno spazio Confluence Data Center o Server, oppure una pagina con tutto quello che contiene.",
     "azure-devops-project": "La wiki di progetto di un progetto Azure DevOps (Services o Server). Tolarix legge e invia commit al suo repository Git nascosto tramite la REST API.",
-    "confluence-cloud": "Uno spazio Confluence Cloud (atlassian.net), oppure una pagina con tutto quello che contiene."
+    "confluence-cloud": "Uno spazio Confluence Cloud (atlassian.net), oppure una pagina con tutto quello che contiene.",
+    "folder-azure-devops": "Una cartella su questa macchina, scritta con la struttura di una wiki Azure DevOps (file .order, .attachments). Puoi fare commit in un repository di wiki Azure DevOps o tenerla come export.",
+    "folder-github-wiki": "Una cartella su questa macchina, scritta con la struttura di una wiki GitHub (nomi di pagina piatti, _Sidebar.md). Clona lì il repository della wiki e fai push del risultato.",
+    "folder-markdown": "Una cartella su questa macchina con file Markdown semplici e link relativi, per generatori di siti statici (MkDocs, Docusaurus), wiki GitLab o un repository."
   },
   "connectorFields": {
     "obsidian": {
@@ -186,6 +189,30 @@
       "location": {
         "parent": "Pagina padre",
         "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la home page dello spazio."
+      }
+    },
+    "folder-azure-devops": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
+      }
+    },
+    "folder-github-wiki": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
+      }
+    },
+    "folder-markdown": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
       }
     }
   },

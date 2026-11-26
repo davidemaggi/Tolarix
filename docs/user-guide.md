@@ -112,6 +112,43 @@ The project must already have a project wiki (**Overview → Wiki → Create
 project wiki**). Tolarix writes to its hidden repository on branch `wikiMaster`.
 Everything else works as for the Code wiki.
 
+### Local folder exports
+
+Three connection types write a Mirror to a folder on disk instead of to a wiki.
+You can then commit the folder to a repository, publish it, or copy it
+elsewhere. They can only be Mirrors.
+
+| Type | What you get |
+|---|---|
+| Local folder: Azure DevOps wiki | The same files Tolarix writes to an Azure DevOps Code wiki (`Name.md`, subpages in `Name/`, `.order`, `.attachments/`). Push the folder to a repository and publish it as a code wiki. |
+| Local folder: GitHub wiki | Files for a GitHub wiki (clone `<repo>.wiki.git` into the folder and push after the run). |
+| Local folder: Markdown | Plain Markdown with relative links, for static site generators (MkDocs, Docusaurus…), GitLab or browsing in a repository. |
+
+| Field | Value |
+|---|---|
+| Export folder | An existing folder on the machine where Tolarix runs, for example `/srv/export`. In Docker, a mounted volume and the path inside the container. |
+
+- **Mirror location:** *Folder inside the export folder*. Empty means the export folder itself.
+- The folder must already exist and be writable; **Test connection** checks it.
+- Changes are written all together at the end of the run. A dry run writes
+  nothing.
+- Files Tolarix does not manage (a `README.md`, a `.git` folder…) are left
+  alone. Edits made to exported pages are overwritten on the next run, with a
+  warning.
+- Pages deleted in the Master are moved under `Archived/`, as in the wikis.
+
+**GitHub wiki.** GitHub shows every page by name, whatever folder it is in, so
+page names are unique across the export: spaces become `-`, characters GitHub
+does not allow are dropped, and a duplicate gets `-(2)`. Subpages still go in a
+folder named after their parent. Tolarix writes `_Sidebar.md` with the page tree
+(in Master order); a sidebar you wrote yourself (without Tolarix's marker on the
+first line) is never replaced. Attachments go in `_attachments/`.
+
+**Markdown.** A page is `Name.md`; a page with subpages becomes `Name/index.md`
+next to them. Each page gets a `title` in its front matter, links are relative
+(`../Other/Notes.md#section`) and attachments go in `assets/`. Plain files have
+no page order, so pages sort by name.
+
 ### Secrets
 
 The token or password field is write-only. When you edit a connection, the

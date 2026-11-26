@@ -166,6 +166,8 @@ core/                     Go module github.com/davidemaggi/tolarix/core
     obsidian/             Obsidian vault connector (decode, encode, write session) + golden tests
     confluence/           Confluence Data Center / Server (REST v1) and Cloud (REST v2) + in-memory API fakes
     azuredevops/          Azure DevOps Code and Project wikis over the Git REST API + in-memory API fake
+    filetree/             virtual folder + one-shot apply (Store: git push or local disk), generic file-based mirror session
+    folder/               local folder exports (Azure DevOps wiki, GitHub wiki, Markdown layouts) + golden tests
     all/                  blank-imports every connector (import this to register them)
   internal/convert/mdscan/ Markdown scanning that never touches code blocks/spans/comments
   internal/convert/storage/ Confluence storage format <-> Markdown (shared by DC and Cloud)
