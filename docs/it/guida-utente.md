@@ -323,6 +323,10 @@ un avviso. Non elimina mai contenuti in silenzio. Dettagli tecnici (in inglese):
 **Da qualsiasi Master a qualsiasi Mirror**
 
 - I link a pagine fuori dall'ambito del flusso diventano testo semplice.
+- I link scritti come indirizzo web completo di una pagina del Master (per esempio un
+  link copiato dal browser in una wiki Azure DevOps o Confluence) vengono trattati come
+  normali link a pagine, quindi in ogni Mirror puntano alla copia di quel Mirror. Gli
+  indirizzi di qualsiasi altra cosa restano invariati.
 - Le modifiche fatte in un Mirror vengono sovrascritte dalla successiva esecuzione che scrive quella pagina.
 - Se due pagine si scambiano di posto in un'unica modifica, entrambe segnalano un conflitto finché una delle due non viene spostata di nuovo (limite noto).
 - Diagrammi draw.io: il file `.drawio` resta come allegato e viene mostrato un PNG, preso dall'anteprima accanto al diagramma, da un export server o da draw.io Desktop. Viene convertita solo la prima pagina del diagramma.

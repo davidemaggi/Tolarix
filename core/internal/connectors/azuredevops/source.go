@@ -169,6 +169,10 @@ type snapshot struct {
 	tree  *model.Tree
 	raw   map[string]string // page id -> source body
 	heads map[string][]string
+
+	wikis     []wikiInfo // the wikis published from this folder (lazy)
+	wikisRead bool
+	pageIDs   map[string]string // "<wiki>/<page id>" -> wiki page path ("" = not found)
 }
 
 func (s *snapshot) warn(p *model.Page, code, msg string) {
@@ -201,15 +205,24 @@ var reScheme = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 // page) into a canonical page or attachment link.
 func (s *snapshot) link(p *model.Page, dir string, image bool, text, rawURL, title string) (string, bool) {
 	u := strings.TrimSuffix(strings.TrimPrefix(rawURL, "<"), ">")
+	titlePart := ""
+	if title != "" {
+		titlePart = ` "` + title + `"`
+	}
+	// A full address of a page or file of this same wiki: point it at the
+	// page, so every Mirror links to its own copy.
+	if rel, frag, ok := s.ownAddress(u); ok {
+		if rel == "" {
+			s.warn(p, "broken-link", fmt.Sprintf("the link to %q points to this wiki, but to a page that does not exist; it is kept unchanged", u))
+			return "", false
+		}
+		return s.resolve(p, image, text, titlePart, rel, frag, isFileLink(rel), u)
+	}
 	if u == "" || reScheme.MatchString(u) || strings.HasPrefix(u, "//") {
 		return "", false
 	}
 	target, frag, _ := strings.Cut(u, "#")
 	target, _, _ = strings.Cut(target, "?")
-	titlePart := ""
-	if title != "" {
-		titlePart = ` "` + title + `"`
-	}
 	if target == "" {
 		return "[" + text + "](" + model.PageLink(p.ID, s.heading(p.ID, frag)) + titlePart + ")", true
 	}
@@ -223,8 +236,14 @@ func (s *snapshot) link(p *model.Page, dir string, image bool, text, rawURL, tit
 		s.warn(p, "link-outside-master", fmt.Sprintf("the link to %q points outside the wiki; it is kept unchanged", u))
 		return "", false
 	}
+	return s.resolve(p, image, text, titlePart, rel, frag, isFileLink(target), u)
+}
+
+// resolve turns a path relative to the wiki root into a canonical page or
+// attachment link; u is the link as written, for warnings.
+func (s *snapshot) resolve(p *model.Page, image bool, text, titlePart, rel, frag string, file bool, u string) (string, bool) {
 	for _, cand := range candidates(rel) {
-		if pg, ok := s.tree.Pages[cand]; ok && !isFileLink(target) {
+		if pg, ok := s.tree.Pages[cand]; ok && !file {
 			if pg.Placeholder && frag == "" {
 				return "[" + text + "](" + model.PageLink(cand, "") + titlePart + ")", true
 			}

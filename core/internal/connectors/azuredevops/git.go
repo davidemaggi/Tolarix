@@ -18,9 +18,17 @@ import (
 // zeroID is the "no commit" object id (creating a branch).
 const zeroID = "0000000000000000000000000000000000000000"
 
-// maxPushBytes caps the file content sent in one push request. Larger runs
-// are split into several pushes.
-var maxPushBytes int64 = 64 << 20
+// maxPushBytes caps the size of one push request body. Azure DevOps rejects
+// requests over 25 MiB ("The maximum request size of 26214400 bytes was
+// exceeded"), and file content travels base64-encoded (4/3 of its size), so
+// this leaves room for the JSON around it. Larger runs are split into several
+// pushes.
+var maxPushBytes int64 = 22 << 20
+
+// pushCost estimates the bytes a change adds to a push request body.
+func pushCost(c change) int64 {
+	return (c.Size+2)/3*4 + int64(len(c.Path)+len(c.From)) + 256
+}
 
 // blobSHA is the git object id of content (what the items API reports).
 func blobSHA(content []byte) string { return filetree.BlobID(content) }
@@ -110,6 +118,16 @@ func (r *Repo) push(ctx context.Context, branch, old, message string, changes []
 	if old == "" {
 		old = zeroID
 	}
+	var tooBig []string
+	for _, c := range changes {
+		if c.Content != nil && pushCost(c) > maxPushBytes {
+			tooBig = append(tooBig, fmt.Sprintf("%s (%.1f MB)", strings.TrimPrefix(c.Path, "/"), float64(c.Size)/(1<<20)))
+		}
+	}
+	if len(tooBig) > 0 {
+		return "", fmt.Errorf("nothing was written: Azure DevOps accepts at most 25 MiB per push and the content travels base64-encoded, so files over about %d MB cannot be pushed: %s. Make them smaller or move them out of the flow's scope",
+			maxPushBytes*3/4>>20, strings.Join(tooBig, ", "))
+	}
 	batches := splitChanges(changes, maxPushBytes)
 	for i, b := range batches {
 		msg := message
@@ -128,19 +146,20 @@ func (r *Repo) push(ctx context.Context, branch, old, message string, changes []
 	return old, nil
 }
 
-// splitChanges groups changes so each group's content stays under limit
-// (a single bigger file gets a group of its own).
+// splitChanges groups changes so each group's request size (see pushCost)
+// stays under limit.
 func splitChanges(changes []change, limit int64) [][]change {
 	var out [][]change
 	var cur []change
 	var size int64
 	for _, c := range changes {
-		if len(cur) > 0 && size+c.Size > limit {
+		cost := pushCost(c)
+		if len(cur) > 0 && size+cost > limit {
 			out = append(out, cur)
 			cur, size = nil, 0
 		}
 		cur = append(cur, c)
-		size += c.Size
+		size += cost
 	}
 	if len(cur) > 0 {
 		out = append(out, cur)

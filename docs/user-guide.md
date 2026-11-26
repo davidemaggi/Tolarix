@@ -307,6 +307,10 @@ never drops content silently. Developer details:
 **Any Master → any Mirror**
 
 - Links to pages outside the flow's scope become plain text.
+- Links written as a full web address of a page in the Master (for example a link
+  copied from the browser in an Azure DevOps or Confluence wiki) are treated like
+  ordinary page links, so in every Mirror they point at that Mirror's copy. Addresses
+  of anything else are kept as they are.
 - Edits made on a Mirror are overwritten by the next run that writes the page.
 - If two pages swap places in one change, both report a conflict until one of them is moved again (known limitation).
 - draw.io diagrams: the `.drawio` file is kept as an attachment and a PNG is shown. The PNG comes from the preview next to the diagram, an export server or draw.io Desktop. Only the first page of a diagram is rendered.

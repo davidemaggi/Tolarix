@@ -34,6 +34,7 @@ type fakeADO struct {
 	commits       map[string]map[string]string // commit -> path -> blob id
 	blobs         map[string][]byte
 	wikis         map[string]wikiInfo
+	pagePaths     map[string]string // wiki page id -> page path
 	pushes        [][]pushChange
 	refsCreated   []string // branches created through the refs API
 	nextCommit    int
@@ -153,6 +154,17 @@ func (f *fakeADO) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Unlock()
 		sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 		writeJSON(w, list[wikiInfo]{Count: len(all), Value: all})
+		return
+	}
+	if len(seg) == 5 && seg[0] == "wiki" && seg[1] == "wikis" && seg[3] == "pages" {
+		f.mu.Lock()
+		pp, ok := f.pagePaths[seg[4]]
+		f.mu.Unlock()
+		if !ok {
+			adoError(w, http.StatusNotFound, "The page with id "+seg[4]+" does not exist")
+			return
+		}
+		writeJSON(w, map[string]any{"id": seg[4], "path": pp})
 		return
 	}
 	if len(seg) == 3 && seg[0] == "wiki" && seg[1] == "wikis" {

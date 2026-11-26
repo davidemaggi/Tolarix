@@ -595,7 +595,7 @@ func TestMirrorIntoEmptyRepository(t *testing.T) {
 
 func TestMirrorSplitsLargePushes(t *testing.T) {
 	old := maxPushBytes
-	maxPushBytes = 40
+	maxPushBytes = 1000 // room for a few small files per push
 	t.Cleanup(func() { maxPushBytes = old })
 	f := newFake(t)
 	seedWiki(f)

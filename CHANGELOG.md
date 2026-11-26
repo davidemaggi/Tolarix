@@ -32,6 +32,11 @@ First public release.
   server or draw.io Desktop).
 - Azure DevOps mirrors are written as one Git commit per run. Code wiki mirrors can
   push to another branch, created from the wiki's branch when it does not exist.
+- Links written as the full Azure DevOps address of a page or file of the Master wiki
+  (copied from the browser) are rewritten to point at the page in every Mirror; links
+  to anything else are kept as they are.
+- Large Azure DevOps mirror runs are split into pushes that stay under Azure DevOps'
+  25 MiB request limit; a single file too big to push is reported by name.
 - Local folder exports (Mirror only): write a Mirror to a folder on disk in the
   Azure DevOps wiki layout, the GitHub wiki layout (with a generated `_Sidebar.md`)
   or plain Markdown with relative links, ready to commit or publish.

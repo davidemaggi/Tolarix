@@ -118,6 +118,15 @@ repository). A project wiki address is rejected with a pointer to the Project wi
   page. Anchors are the heading in lower case, spaces as `-`, other characters
   percent-encoded (`Install & Run` → `#install-%26-run`). The reader also accepts the
   GitHub style (punctuation dropped).
+- Full addresses of this same wiki, as copied from the browser (`address.go`), become
+  page or attachment links too: `…/_wiki/wikis/<wiki>/<id>/<Title>` (the id is looked
+  up with the wiki pages API, falling back to a unique page with that title),
+  `…/_wiki/wikis/<wiki>?pagePath=/A/B` and `…/_git/<repo>?path=/<wiki folder>/A/B.md`,
+  absolute or server-relative. The organisation matches whatever the host spelling
+  (`dev.azure.com/org` = `org.visualstudio.com`); the wiki matches by name or id among
+  the wikis published from the same repository folder. Addresses of another wiki,
+  repository folder, branch or organisation are kept unchanged. An address of this
+  wiki whose page does not exist gives `broken-link`.
 
 **Dialect.**
 
@@ -152,8 +161,11 @@ stays at the base commit, which the next run reads as its starting point.
   so the file history follows it.
 - Branch policies that require pull requests (TF402455) make the push fail with an
   explanation: use a branch without required reviews for mirrors.
-- Pushes above 64 MiB of content are split into several commits ("part i of n"). If a
-  later part fails, the earlier parts stay pushed (see the follow-ups in plan.md).
+- Azure DevOps rejects push requests over 25 MiB, and content travels base64-encoded.
+  Pushes are split so each request stays under `maxPushBytes` (22 MiB, counting base64
+  and JSON overhead) into several commits ("part i of n"). If a later part fails, the
+  earlier parts stay pushed (see the follow-ups in plan.md). A single file too big for
+  any request (about 16 MB) fails the run before anything is pushed, naming the file.
 - Edits made in the wiki are detected through the git blob id, then overwritten with a
   `mirror-edited` warning.
 
