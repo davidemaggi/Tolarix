@@ -74,20 +74,21 @@ func TestSealUsesFreshNonce(t *testing.T) {
 
 func TestLoadKeyGeneratesThenReusesFile(t *testing.T) {
 	t.Setenv(EnvKey, "")
+	t.Setenv(EnvKeyStore, "")
 	dir := t.TempDir()
-	k1, src, err := LoadKey(dir)
+	k1, err := LoadKey(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src != KeyFromGenerated || len(k1) != keySize {
-		t.Fatalf("src=%s len=%d", src, len(k1))
+	if k1.Source != KeyFromGenerated || k1.Stored != KeyFromFile || len(k1.Bytes) != keySize {
+		t.Fatalf("first load: %+v", k1)
 	}
-	k2, src, err := LoadKey(dir)
+	k2, err := LoadKey(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src != KeyFromFile || !bytes.Equal(k1, k2) {
-		t.Fatalf("second load: src=%s equal=%v", src, bytes.Equal(k1, k2))
+	if k2.Source != KeyFromFile || !bytes.Equal(k1.Bytes, k2.Bytes) {
+		t.Fatalf("second load: src=%s equal=%v", k2.Source, bytes.Equal(k1.Bytes, k2.Bytes))
 	}
 }
 
@@ -96,11 +97,11 @@ func TestLoadKeyFromEnv(t *testing.T) {
 	_, _ = rand.Read(key)
 	t.Setenv(EnvKey, base64.StdEncoding.EncodeToString(key))
 	dir := t.TempDir()
-	got, src, err := LoadKey(dir)
+	got, err := LoadKey(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if src != KeyFromEnv || !bytes.Equal(got, key) {
+	if got.Source != KeyFromEnv || !bytes.Equal(got.Bytes, key) {
 		t.Fatal("env key not used")
 	}
 	if _, err := os.Stat(filepath.Join(dir, KeyFileName)); !errors.Is(err, os.ErrNotExist) {
@@ -110,7 +111,7 @@ func TestLoadKeyFromEnv(t *testing.T) {
 
 func TestLoadKeyInvalidEnv(t *testing.T) {
 	t.Setenv(EnvKey, "too-short")
-	if _, _, err := LoadKey(t.TempDir()); err == nil || !strings.Contains(err.Error(), EnvKey) {
+	if _, err := LoadKey(t.TempDir()); err == nil || !strings.Contains(err.Error(), EnvKey) {
 		t.Fatalf("expected helpful error, got %v", err)
 	}
 }

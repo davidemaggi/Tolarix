@@ -200,3 +200,34 @@ func TestServeWebFirstStartPasswordAndHealthcheck(t *testing.T) {
 		t.Fatal("serve did not shut down")
 	}
 }
+
+// The desktop app passes the token in the environment and holds stdin open;
+// closing it (app quit or crash) stops the server cleanly.
+func TestServeDesktopStopsWhenStdinCloses(t *testing.T) {
+	t.Setenv("TOLARIX_SECRET_KEY", "")
+	t.Setenv("TOLARIX_DESKTOP_TOKEN", "0123456789abcdef-token")
+	stdinR, stdinW := io.Pipe()
+	out := &syncBuffer{}
+	root := NewRootCommand(out, io.Discard)
+	root.SetIn(stdinR)
+	root.SetArgs([]string{"serve", "--mode", "desktop", "--stop-on-stdin-close", "--data-dir", t.TempDir()})
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(context.Background()) }()
+
+	deadline := time.Now().Add(60 * time.Second)
+	for !strings.Contains(out.String(), ReadyLinePrefix) {
+		if time.Now().After(deadline) {
+			t.Fatal("no ready line")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = stdinW.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("serve: %v", err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("serve did not stop when stdin closed")
+	}
+}

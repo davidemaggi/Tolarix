@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -32,6 +33,10 @@ type serveOpts struct {
 	host  string
 	port  int
 	token string
+	// stopOnStdinClose shuts down when stdin closes: the desktop app holds
+	// the pipe, so the server stops cleanly when the app quits or crashes,
+	// on every OS (Windows has no SIGTERM).
+	stopOnStdinClose bool
 }
 
 func newServeCommand(a *app) *cobra.Command {
@@ -45,14 +50,26 @@ func newServeCommand(a *app) *cobra.Command {
   --mode desktop  listens on 127.0.0.1 only; every request must carry --token. Started by the desktop app.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context(), a, o, cmd.Flags().Changed("port"))
+			ctx := cmd.Context()
+			if o.stopOnStdinClose {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				go func() {
+					_, _ = io.Copy(io.Discard, cmd.InOrStdin())
+					a.log.Info("stdin closed: the desktop app is gone, stopping")
+					cancel()
+				}()
+			}
+			return runServe(ctx, a, o, cmd.Flags().Changed("port"))
 		},
 	}
 	f := cmd.Flags()
 	f.StringVar(&o.mode, "mode", envOr("TOLARIX_MODE", "web"), "web or desktop (env TOLARIX_MODE)")
 	f.StringVar(&o.host, "host", os.Getenv("TOLARIX_HOST"), "bind address (env TOLARIX_HOST; default 0.0.0.0 in web mode; desktop mode always uses 127.0.0.1)")
 	f.IntVar(&o.port, "port", envInt("TOLARIX_PORT", 8080), "port; 0 picks a free port (env TOLARIX_PORT)")
-	f.StringVar(&o.token, "token", "", "launch token required on every request (desktop mode; env TOLARIX_DESKTOP_TOKEN)")
+	f.StringVar(&o.token, "token", "", "launch token required on every request (desktop mode; env TOLARIX_DESKTOP_TOKEN, preferred: arguments are visible to other users)")
+	f.BoolVar(&o.stopOnStdinClose, "stop-on-stdin-close", false, "shut down cleanly when stdin closes (used by the desktop app)")
 	return cmd
 }
 
@@ -91,15 +108,12 @@ func runServe(ctx context.Context, a *app, o *serveOpts, portSet bool) error {
 	}
 	defer st.Close()
 
-	key, src, err := secrets.LoadKey(dir)
+	key, err := secrets.LoadKey(dir)
 	if err != nil {
 		return &ExitError{Code: ExitConfigError, Err: err}
 	}
-	if src == secrets.KeyFromGenerated {
-		a.log.Warn("generated a new secret key; back it up together with the database, losing it means re-entering every connection secret",
-			"file", secrets.KeyFileName)
-	}
-	cipher, err := secrets.NewCipher(key)
+	logKey(a.log, key)
+	cipher, err := secrets.NewCipher(key.Bytes)
 	if err != nil {
 		return &ExitError{Code: ExitConfigError, Err: err}
 	}

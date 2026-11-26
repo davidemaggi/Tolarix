@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"text/tabwriter"
 
 	_ "github.com/davidemaggi/tolarix/core/internal/connectors/all" // register connectors
@@ -28,12 +29,13 @@ func (a *app) openRuntime(ctx context.Context) (*runtime, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	key, _, err := secrets.LoadKey(dir)
+	key, err := secrets.LoadKey(dir)
 	if err != nil {
 		_ = st.Close()
 		return nil, nil, &ExitError{Code: ExitConfigError, Err: err}
 	}
-	ci, err := secrets.NewCipher(key)
+	logKey(a.log, key)
+	ci, err := secrets.NewCipher(key.Bytes)
 	if err != nil {
 		_ = st.Close()
 		return nil, nil, &ExitError{Code: ExitConfigError, Err: err}
@@ -83,4 +85,20 @@ func plural(n int, word string) string {
 		return fmt.Sprintf("%d %s", n, word)
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// logKey reports a new secret key (never its value) and keychain fallbacks.
+func logKey(log *slog.Logger, key secrets.Key) {
+	if key.Warning != "" {
+		log.Warn(key.Warning)
+	}
+	switch {
+	case key.Source != secrets.KeyFromGenerated:
+	case key.Stored == secrets.KeyFromKeychain:
+		log.Info("generated a new secret key and stored it in the OS keychain",
+			"service", secrets.KeychainService, "marker", secrets.KeychainMarkerName)
+	default:
+		log.Warn("generated a new secret key; back it up together with the database, losing it means re-entering every connection secret",
+			"file", secrets.KeyFileName)
+	}
 }

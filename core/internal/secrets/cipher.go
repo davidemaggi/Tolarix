@@ -1,9 +1,13 @@
 // Package secrets encrypts connection secrets at rest and provides a String
 // type that refuses to print its value.
 //
-// Key source, in order: TOLARIX_SECRET_KEY (base64 of 32 random bytes), then
-// the key file "secret.key" in the data directory, generated on first use.
-// Losing the key means every stored secret has to be entered again.
+// Key source, in order: TOLARIX_SECRET_KEY (base64 of 32 random bytes), the
+// key file "secret.key" in the data directory, then the OS keychain when the
+// data directory says the key is there (see keychain.go). A missing key is
+// generated on first use: in the keychain when TOLARIX_SECRET_KEY_STORE is
+// "keychain" (the desktop app sets it) and the keychain works, otherwise in
+// the key file. Losing the key means every stored secret has to be entered
+// again.
 package secrets
 
 import (
@@ -38,8 +42,19 @@ type KeySource string
 const (
 	KeyFromEnv       KeySource = "env"
 	KeyFromFile      KeySource = "file"
-	KeyFromGenerated KeySource = "generated"
+	KeyFromKeychain  KeySource = "keychain"
+	KeyFromGenerated KeySource = "generated" // new key, in the key file or the keychain (see Key.Stored)
 )
+
+// Key is a loaded master key.
+type Key struct {
+	Bytes  []byte
+	Source KeySource
+	// Stored is where a generated key was saved: KeyFromFile or KeyFromKeychain.
+	Stored KeySource
+	// Warning explains a fallback (keychain asked for but not available).
+	Warning string
+}
 
 // Cipher seals and opens secrets with AES-256-GCM.
 type Cipher struct{ aead cipher.AEAD }
@@ -87,49 +102,94 @@ func (c *Cipher) Open(ciphertext, aad []byte) ([]byte, error) {
 	return pt, nil
 }
 
-// LoadKey returns the master key and where it came from, creating the key
-// file in dataDir when neither the env var nor the file exists.
-func LoadKey(dataDir string) ([]byte, KeySource, error) {
+// LoadKey returns the master key, generating and storing one when there is
+// none yet (see the package comment for the order).
+func LoadKey(dataDir string) (Key, error) {
 	if v := strings.TrimSpace(os.Getenv(EnvKey)); v != "" {
 		key, err := decodeKey(v)
 		if err != nil {
-			return nil, "", fmt.Errorf("%s is invalid: %w (generate one with: openssl rand -base64 32)", EnvKey, err)
+			return Key{}, fmt.Errorf("%s is invalid: %w (generate one with: openssl rand -base64 32)", EnvKey, err)
 		}
-		return key, KeyFromEnv, nil
+		return Key{Bytes: key, Source: KeyFromEnv}, nil
 	}
-	path := filepath.Join(dataDir, KeyFileName)
-	b, err := os.ReadFile(path) //nolint:gosec // path is the key file inside the configured data dir
-	switch {
-	case err == nil:
-		key, derr := decodeKey(strings.TrimSpace(string(b)))
-		if derr != nil {
-			return nil, "", fmt.Errorf("key file %s is invalid: %w", path, derr)
+	if key, ok, err := readKeyFile(dataDir); ok || err != nil {
+		return Key{Bytes: key, Source: KeyFromFile}, err
+	}
+	if key, ok, err := readKeychain(dataDir); ok || err != nil {
+		return Key{Bytes: key, Source: KeyFromKeychain}, err
+	}
+	var warning string
+	if strings.EqualFold(strings.TrimSpace(os.Getenv(EnvKeyStore)), "keychain") {
+		key, err := generateInKeychain(dataDir)
+		switch {
+		case err == nil:
+			return Key{Bytes: key, Source: KeyFromGenerated, Stored: KeyFromKeychain}, nil
+		case errors.Is(err, errKeychainRace):
+			return LoadKey(dataDir) // another process stored one first: use it
+		default:
+			warning = "the OS keychain is not available (" + err.Error() + "); the secret key is stored in " + KeyFileName + " instead"
 		}
-		return key, KeyFromFile, nil
-	case !errors.Is(err, os.ErrNotExist):
-		return nil, "", fmt.Errorf("read key file %s: %w", path, err)
 	}
-	key := make([]byte, keySize)
-	if _, err := rand.Read(key); err != nil {
-		return nil, "", err
-	}
-	// O_EXCL: if another process (CLI vs server) created it first, use theirs.
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // key file inside the configured data dir
+	key, err := generateKeyFile(dataDir)
 	if errors.Is(err, os.ErrExist) {
 		return LoadKey(dataDir)
 	}
 	if err != nil {
-		return nil, "", fmt.Errorf("create key file %s: %w", path, err)
+		return Key{}, err
 	}
-	if _, err := f.WriteString(base64.StdEncoding.EncodeToString(key) + "\n"); err != nil {
+	return Key{Bytes: key, Source: KeyFromGenerated, Stored: KeyFromFile, Warning: warning}, nil
+}
+
+func readKeyFile(dataDir string) ([]byte, bool, error) {
+	path := filepath.Join(dataDir, KeyFileName)
+	b, err := os.ReadFile(path) //nolint:gosec // path is the key file inside the configured data dir
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, false, nil
+	case err != nil:
+		return nil, false, fmt.Errorf("read key file %s: %w", path, err)
+	}
+	key, err := decodeKey(strings.TrimSpace(string(b)))
+	if err != nil {
+		return nil, false, fmt.Errorf("key file %s is invalid: %w", path, err)
+	}
+	return key, true, nil
+}
+
+// generateKeyFile creates the key file; os.ErrExist when another process
+// (CLI vs server) created it first.
+func generateKeyFile(dataDir string) ([]byte, error) {
+	key, err := newKey()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dataDir, KeyFileName)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // key file inside the configured data dir
+	if errors.Is(err, os.ErrExist) {
+		return nil, err
+	}
+	if err != nil {
+		return nil, fmt.Errorf("create key file %s: %w", path, err)
+	}
+	if _, err := f.WriteString(encodeKey(key) + "\n"); err != nil {
 		_ = f.Close()
-		return nil, "", fmt.Errorf("write key file %s: %w", path, err)
+		return nil, fmt.Errorf("write key file %s: %w", path, err)
 	}
 	if err := f.Close(); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return key, KeyFromGenerated, nil
+	return key, nil
 }
+
+func newKey() ([]byte, error) {
+	key := make([]byte, keySize)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func encodeKey(key []byte) string { return base64.StdEncoding.EncodeToString(key) }
 
 func decodeKey(s string) ([]byte, error) {
 	key, err := base64.StdEncoding.DecodeString(s)

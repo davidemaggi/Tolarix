@@ -11,7 +11,7 @@ Everything needed to pick the project up on a new PC. Status and decisions:
 | Node.js | 22+ | |
 | pnpm | 10.x (see `packageManager` in `package.json`) | `corepack enable` installs the right one |
 | golangci-lint | v2 | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` |
-| Rust + Tauri prerequisites | stable | only from milestone 7 (desktop) |
+| Rust + [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) | stable (`rustup default stable`) | only for the desktop app (`desktop/`); add `~/.cargo/bin` to PATH |
 | Docker | any recent | to build the image (`deploy/`) |
 
 ## First run
@@ -49,7 +49,10 @@ the container.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TOLARIX_DATA_DIR` | OS app-data folder (`/data` in Docker) | database, `secret.key` |
+| `TOLARIX_DATA_DIR` | OS app-data folder (`/data` in Docker) | database, `secret.key` (shared by the desktop app and the CLI) |
+| `TOLARIX_SECRET_KEY` | none | base64 secret key; overrides `secret.key` and the keychain |
+| `TOLARIX_SECRET_KEY_STORE` | `file` | `keychain` stores a *new* key in the OS keychain (the desktop app sets it); see plan.md, "Taken during M7" |
+| `TOLARIX_DESKTOP_TOKEN` | none | launch token in desktop mode (set by the desktop app; preferred over `--token`) |
 | `TOLARIX_MODE` | `web` | `web` (admin login) or `desktop` (launch token, 127.0.0.1 only) |
 | `TOLARIX_HOST` / `TOLARIX_PORT` | `0.0.0.0` / `8080` | listen address in web mode |
 | `TOLARIX_TIMEZONE` | `TZ`, else `UTC` | default timezone for schedules, shown in the UI |
@@ -78,6 +81,14 @@ pnpm format             # Prettier
 
 # Both (from the root), after editing core/internal/api/openapi.yaml
 pnpm generate           # Go server stubs (oapi-codegen) + web/src/api/schema.gen.ts; CI fails if they are stale
+
+# Desktop (from desktop/), after `pnpm --filter web build` (the sidecar embeds the UI)
+pnpm dev                # tauri dev: builds the sidecar for this machine, opens the app
+pnpm build              # installers for this machine (unsigned); `pnpm tauri build --debug --bundles app` is quicker
+pnpm sidecar            # only (re)build src-tauri/binaries/tolarix-<target triple>
+pnpm icons              # regenerate src-tauri/icons from icons/icon.svg
+# Rust checks (from desktop/src-tauri/)
+cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 
 Run `tolarix serve` (web mode) in a second terminal while using `pnpm dev`, and sign in once:
@@ -140,8 +151,12 @@ web/                      React + Vite + TS + Tailwind v4 + shadcn/ui
   src/i18n/locales/       en.json, it.json — a test fails if their keys differ
   src/test/               test helpers: renderApp, a fake API (mockApi) and a fake EventSource
   e2e/                    Playwright tests against the real binary
+desktop/                  Tauri v2 shell: starts the tolarix sidecar and shows its UI
+  splash/                 static page shown while the server starts (and its startup errors)
+  scripts/sidecar.mjs     builds the sidecar into src-tauri/binaries/tolarix-<triple> (Tauri externalBin)
+  src-tauri/src/          lib.rs (window, navigation, single instance), sidecar.rs (start/stop, ready line, token)
 deploy/                   Dockerfile, docker-compose.yml
-scripts/build-core.mjs    cross-platform go build with version ldflags
+scripts/build-core.mjs    cross-platform go build with version ldflags (TOLARIX_OUT overrides the output)
 docs/dev/                 this guide, plan + status, design notes
 ```
 
@@ -202,4 +217,10 @@ cd core && go test ./... -update   # rewrite golden files, then review the diff 
   `baseUrl` is made absolute from `window.location.origin`.
 - Playwright's `getByLabel`/`getByRole` match substrings by default ("New password" also matches "Repeat the new
   password"): pass `{ exact: true }`.
+- The desktop app's server writes its log to the OS app log folder (`~/Library/Logs/io.github.davidemaggi.tolarix/server.log`
+  on macOS, `%LOCALAPPDATA%\io.github.davidemaggi.tolarix\logs` on Windows, `~/.local/share/io.github.davidemaggi.tolarix/logs` on Linux).
+- `tauri-build` fails if the sidecar binary is missing: run `pnpm sidecar` (or, for `cargo` checks only, create an empty
+  `src-tauri/binaries/tolarix-<host triple>` like CI does).
+- Running the desktop app from a debug bundle uses your real data dir and keychain; set `TOLARIX_DATA_DIR` to a temp folder
+  to try it, and delete the keychain entry afterwards (`security delete-generic-password -s Tolarix -a secret-key:<dir>` on macOS).
 - File names with spaces in fixtures: quote them in shell loops (`find -print0 | while read -d ''`), and never `cat` an unquoted name that might be `-`.

@@ -110,6 +110,32 @@ jobs:
             web/test-results
           retention-days: 7
 
+  desktop:
+    name: Desktop (cargo fmt, clippy, test)
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: desktop/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries for Tauri
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      # tauri-build checks that the sidecar exists; the checks do not run it.
+      - name: Placeholder sidecar
+        run: mkdir -p binaries && touch "binaries/tolarix-$(rustc -vV | sed -n 's/^host: //p')"
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest

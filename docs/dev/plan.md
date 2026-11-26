@@ -15,18 +15,19 @@ The original product brief is in [brief.md](brief.md).
 | 3 | OpenAPI + web auth, dashboard, connection & flow wizards, run history + live logs, Docker image | done | `develop` |
 | 4 | **Priority connectors:** Confluence Data Center/Server + Azure DevOps Code wiki, storage-format converter, **draw.io renderer** | done | `develop` |
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | done | `develop` |
-| 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | **done, awaiting review** | `develop` |
-| 7 | Tauri desktop app with Go sidecar, installers | | |
+| 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | done | `develop` |
+| 7 | Tauri desktop app with Go sidecar, installers | **done, awaiting review** | `develop` |
 | 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | | |
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
 ### Where we left off (2026-11-26)
 
-- M5 was approved ("procedi", 2026-11-26). M6 is committed on `develop` (not pushed). Start the next session by asking for the M6 review and approval to begin M7.
-- Defaults chosen in M2–M6 that are awaiting review are listed under "Taken during M2/M3/M4/M5/M6" below. How each wiki is mapped: [connectors.md](connectors.md).
+- M6 was approved ("vai", 2026-11-26). M7 is committed on `develop` (not pushed). Start the next session by asking for the M7 review and approval to begin M8.
+- Defaults chosen in M2–M7 that are awaiting review are listed under "Taken during M2/…/M7" below. How each wiki is mapped: [connectors.md](connectors.md).
 - M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is the first thing to do with the product owner.
-- **Next: M7.** Tauri desktop app with the Go sidecar, installers.
+- M7 was smoke-tested on macOS (Apple silicon, debug bundle): server start, keychain key shared with the CLI, single instance, server stop when the app is killed. Windows and Linux builds have only been set up in CI (`desktop.yml`), not run yet: the first CI run on `main` (or a manual dispatch) is their first build.
+- **Next: M8.** Docs (incl. external scheduling guide), hardening, a11y pass, release.
 - To resume on a new machine, follow [README.md](README.md) (prerequisites, `pnpm install`, `pnpm build`, tests).
 
 ## Milestone details
@@ -116,6 +117,17 @@ Taken during M6:
 - **Wizard**: Simple tab (radio list with inline fields; the weekday toggles default to Monday–Friday, time 07:30) and Advanced tab (cron; it starts from the cron of the simple form). The timezone field defaults to the instance timezone and suggests IANA names. The preview (sentence, cron, next 5 runs in the flow's timezone) updates live, debounced by 300 ms, and shows the server's field errors.
 - **YAML import**: flows take `schedule` (same JSON shape), `timezone` (kept on re-import when omitted) and `builtInSchedule`.
 
+Taken during M7:
+- **Shell**: Tauri v2 (`desktop/`), no frontend of its own. A static splash page (`desktop/splash`, en/it from the system language) shows while the sidecar starts, and shows the error with the tail of the server log if it fails. The window has no IPC permissions: the UI talks to the local server over HTTP like in a browser.
+- **Sidecar**: the shell starts the bundled `tolarix serve --mode desktop --stop-on-stdin-close` with plain `std::process` (no shell plugin), waits up to 30 s for `TOLARIX_READY {"port":…}`, then opens `http://127.0.0.1:<port>/?token=…`; the server swaps the token for an HttpOnly cookie and redirects. The token (32 random bytes) goes in `TOLARIX_DESKTOP_TOKEN`, never in the arguments (visible to other users). `TOLARIX_PORT`, `TOLARIX_HOST` and `TOLARIX_MODE` are removed from its environment.
+- **Shutdown through stdin**: the shell keeps the sidecar's stdin open; closing it (app exit, or the app crashing or being killed) makes the server shut down cleanly. Works the same on Windows, which has no SIGTERM. The shell waits 10 s, then kills it.
+- **Navigation**: the window only shows the splash and `http://127.0.0.1:<port>`. Other http(s) and mailto links (and `target=_blank`) open in the system browser; other schemes are ignored.
+- **Single instance** (`tauri-plugin-single-instance`): a second launch focuses the running window, so two servers and schedulers never share one database.
+- **Shared data dir**: the desktop app passes no data dir, so it and the CLI use the same default folder (and `TOLARIX_DATA_DIR` still applies). Server log: the OS app log folder (`~/Library/Logs/io.github.davidemaggi.tolarix/server.log` on macOS), moved to `server.log.1` past 5 MB.
+- **Secret key in the OS keychain** (go-keyring: macOS Keychain, Windows Credential Manager, Secret Service on Linux): only a *new* key, and only when `TOLARIX_SECRET_KEY_STORE=keychain` (the desktop app sets it). The key goes to service `Tolarix`, account `secret-key:<absolute data dir>`, and a marker file `secret.key.keychain` (no secret in it) is written to the data dir, so the CLI finds the key without any setting. Without the marker the keychain is never touched (Docker, CI, an existing `secret.key`). If the keychain fails, the key goes to `secret.key` and the log says why. Order: `TOLARIX_SECRET_KEY` → `secret.key` → marker/keychain → generate. A marker whose keychain entry is gone is an error that explains how to recover (no silent new key: existing secrets would become unreadable).
+- **Identifier** `io.github.davidemaggi.tolarix`; app version from `desktop/src-tauri/Cargo.toml`; icons generated from `desktop/icons/icon.svg` (`pnpm --filter desktop icons`).
+- **Installers** (`.github/workflows/desktop.yml`, tauri-action): macOS arm64 + x64 (`.dmg`), Windows x64 (`.msi`, NSIS `.exe`), Linux x64 (`.deb`, `.rpm`, `.AppImage`). Manual dispatch, pushes to `main`, tags `v*` (draft release). Unsigned in v1. `ci.yml` gains a `desktop` job (cargo fmt, clippy, test).
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. GoReleaser for CLI binaries (M8).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
@@ -152,3 +164,8 @@ Taken during M6:
 - **M6 follow-ups**:
   - The cap of 2 lives in the built-in scheduler: `run-due` processes and CLI `flow run` are not counted (only the per-flow lock applies across processes).
   - Schedule sentences and validation messages for the advanced cron field are server-side English/Italian; cron parse errors are English only.
+- **M7 follow-ups**:
+  - Installers are unsigned: macOS Gatekeeper ("cannot be opened", right-click → Open, or `xattr -dr com.apple.quarantine`) and Windows SmartScreen warn. Signing and notarisation, and the Tauri updater, are for after v1.
+  - Windows and Linux desktop builds have not been launched on a real machine yet.
+  - On Linux without a Secret Service (no GNOME Keyring/KWallet), the key falls back to `secret.key` with a warning.
+  - The desktop app has no menu or tray; closing the window quits the app and stops the built-in scheduler (by design for v1: run `tolarix serve` or `run-due` for always-on schedules).

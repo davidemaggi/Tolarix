@@ -1,6 +1,7 @@
 // Builds the tolarix binary into ./bin with version info. Cross-platform
 // replacement for a Makefile. Run `pnpm build` to build the web UI first.
 //   TOLARIX_VERSION=1.0.0 GOOS=linux GOARCH=arm64 node scripts/build-core.mjs
+// TOLARIX_OUT overrides the output file (the desktop sidecar uses it).
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
@@ -18,7 +19,9 @@ const commit = git("rev-parse", "HEAD");
 const date = new Date().toISOString().replace(/\.\d+Z$/, "Z");
 const goos = process.env.GOOS || process.platform.replace("win32", "windows");
 const ext = goos === "windows" ? ".exe" : "";
-const out = path.join(root, "bin", `tolarix${ext}`);
+const out = process.env.TOLARIX_OUT
+  ? path.resolve(process.env.TOLARIX_OUT)
+  : path.join(root, "bin", `tolarix${ext}`);
 const pkg = "github.com/davidemaggi/tolarix/core/internal/buildinfo";
 
 execFileSync(

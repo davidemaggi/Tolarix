@@ -39,6 +39,7 @@ web/playwright/.cache/
 *.db-shm
 *.db-wal
 secret.key
+secret.key.keychain
 .env
 .env.*
 !.env.example
