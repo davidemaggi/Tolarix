@@ -10,7 +10,9 @@ Questa guida descrive l'interfaccia web, che è la stessa in Docker e nell'app
 desktop, e la riga di comando. Per installare un server consulta l'
 [admin guide](../admin-guide.md) (in inglese). Per eseguire i flussi da cron o
 dall'Utilità di pianificazione consulta [scheduling.md](../scheduling.md). La
-versione inglese di questa guida è [user-guide.md](../user-guide.md).
+versione inglese di questa guida è [user-guide.md](../user-guide.md). Prima volta
+con Tolarix? Il [manuale](manuale.md) è una visita guidata, illustrata, delle
+schermate.
 
 - [Concetti](#concetti)
 - [Collegare le wiki](#collegare-le-wiki)

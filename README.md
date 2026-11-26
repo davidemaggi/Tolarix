@@ -15,7 +15,11 @@ links, images and attachments included — on a schedule or with one click.
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)
 
-[Why](#-why-tolarix) · [Features](#-features) · [Install](#-install) · [Docs](#-documentation) · [Formats](#-supported-wikis) · [Roadmap](#-roadmap) · [Build](#-build-from-source)
+[Why](#-why-tolarix) · [Features](#-features) · [Screenshots](#-screenshots) · [Install](#-install) · [Docs](#-documentation) · [Formats](#-supported-wikis) · [Roadmap](#-roadmap) · [Build](#-build-from-source)
+
+<br/>
+
+<img src="docs/images/en/dashboard.png" alt="The Tolarix dashboard with two sync flows and their last runs" width="860" />
 
 </div>
 
@@ -44,6 +48,18 @@ format.
 - 📐 **draw.io aware.** Diagrams stay editable as `.drawio` attachments *and* show up as PNGs in the mirror.
 - 🛡️ **Secure by default.** Encrypted secrets at rest (AES-256-GCM), nothing sensitive in logs or API responses, a single admin account with forced first-login password change.
 - 🌍 **English and Italian UI**, light and dark themes, keyboard-friendly and accessible.
+
+## 📸 Screenshots
+
+| | |
+|---|---|
+| ![The flow wizard: choosing what to mirror from a page tree](docs/images/en/flow-scope.png) | ![The flow wizard: three Mirrors, each with its own folder](docs/images/en/flow-mirrors.png) |
+| **Pick what to mirror** from the Master's page tree. | **Any number of Mirrors**, each in its own folder. |
+| ![The schedule step with a preview of the next runs](docs/images/en/flow-schedule.png) | ![A run report with a warning about a link](docs/images/en/run-report.png) |
+| **Human-friendly schedules** with a preview of the next runs. | **Run reports** that say what changed and what could not be copied exactly. |
+
+A step-by-step tour of every screen is in the [manual](docs/manual.md)
+([italiano](docs/it/manuale.md)).
 
 ## 🧱 One core, three ways to run it
 
@@ -80,6 +96,7 @@ page, check it against `SHA256SUMS`, and put the binary on your PATH.
 
 | Guide | For |
 |---|---|
+| [Manual](docs/manual.md) · [Manuale (italiano)](docs/it/manuale.md) | an illustrated tour: first sign-in, connections, a flow, a run and its report |
 | [User guide](docs/user-guide.md) · [Guida utente (italiano)](docs/it/guida-utente.md) | connecting wikis, flows, schedules, run reports, conversion limits, CLI |
 | [Admin guide](docs/admin-guide.md) | Docker, first sign-in, password reset, secret key, backup, upgrades, HTTPS |
 | [Scheduling](docs/scheduling.md) | cron, systemd, launchd, Windows Task Scheduler, Docker, Kubernetes |

@@ -10,7 +10,8 @@ This guide covers the web interface, which is the same in Docker and in the
 desktop app, and the command line. To install and run a server, see the
 [admin guide](admin-guide.md). To run flows from cron or Task Scheduler, see
 [scheduling.md](scheduling.md). There is an Italian version of this guide in
-[it/guida-utente.md](it/guida-utente.md).
+[it/guida-utente.md](it/guida-utente.md). New to Tolarix? The [manual](manual.md)
+is an illustrated tour of the screens.
 
 - [Concepts](#concepts)
 - [Connecting your wikis](#connecting-your-wikis)

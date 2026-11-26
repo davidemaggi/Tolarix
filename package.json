@@ -11,6 +11,7 @@
     "build:core": "node scripts/build-core.mjs",
     "test": "pnpm --filter web test && cd core && go test ./...",
     "lint": "pnpm --filter web lint && pnpm --filter web typecheck",
-    "generate": "cd core/internal/api/oapi && go generate ./... && cd ../../../.. && pnpm --filter web generate"
+    "generate": "cd core/internal/api/oapi && go generate ./... && cd ../../../.. && pnpm --filter web generate",
+    "screenshots": "node scripts/screenshots.mjs"
   }
 }

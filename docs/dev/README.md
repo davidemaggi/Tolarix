@@ -195,6 +195,7 @@ web/                      React + Vite + TS + Tailwind v4 + shadcn/ui
   src/test/               test helpers: renderApp, a fake API (mockApi) and a fake EventSource
   e2e/                    Playwright tests against the real binary
   e2e/a11y.ts             axe checks (WCAG 2.2 AA) called at every step of the e2e flow
+  screenshots/            Playwright tour that saves docs/images/<lang>/*.png (see "Screenshots")
 desktop/                  Tauri v2 shell: starts the tolarix sidecar and shows its UI
   splash/                 static page shown while the server starts (and its startup errors)
   scripts/sidecar.mjs     builds the sidecar into src-tauri/binaries/tolarix-<triple> (Tauri externalBin)
@@ -267,6 +268,25 @@ CI (`ci.yml`) also runs `pnpm audit --prod` and `govulncheck` on the built binar
 ```sh
 cd core && go test ./... -update   # rewrite golden files, then review the diff with git before committing
 ```
+
+## Screenshots
+
+The README and the manuals (`docs/manual.md`, `docs/it/manuale.md`) use the images in
+`docs/images/<lang>/`. They are generated, so regenerate them when the UI changes:
+
+```sh
+pnpm screenshots        # builds the web UI and ./bin/tolarix, then runs the tour in en and it
+pnpm screenshots it     # one language only
+```
+
+`web/screenshots/setup.ts` starts the binary in web mode on a fresh data dir with a
+sample handbook vault (under `/tmp/tolarix-demo` on macOS and Linux, so the paths in
+the shots stay short). `tour.spec.ts` signs in, adds the connections, creates the flows,
+runs them and saves one PNG per screen. Labels come from the locale files, so the same
+tour works in every language. The Azure DevOps and Confluence connections use sample
+addresses and are never tested. The footer shows the newest version in `CHANGELOG.md`.
+Notifications are hidden in the shots. Look at the images before committing them; a
+screen captured mid-run would show the host name ("Running on <host>/<pid>").
 
 ## Releasing
 

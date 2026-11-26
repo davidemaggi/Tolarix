@@ -30,7 +30,7 @@ async function addConnection(page: Page, name: string, vault: string) {
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByLabel("Vault folder", { exact: true }).fill(vault);
   await page.getByRole("button", { name: "Test connection" }).click();
-  await expect(page.getByText("It works.")).toBeVisible();
+  await expect(page.getByText("It works: Tolarix can reach this wiki.")).toBeVisible();
   await expectAccessible(page, "the connection form");
   await page.getByRole("button", { name: "Add connection" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();

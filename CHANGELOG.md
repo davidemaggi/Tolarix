@@ -37,6 +37,8 @@ First public release.
   to anything else are kept as they are.
 - Large Azure DevOps mirror runs are split into pushes that stay under Azure DevOps'
   25 MiB request limit; a single file too big to push is reported by name.
+- An illustrated manual in English and Italian (`docs/manual.md`, `docs/it/manuale.md`)
+  and screenshots in the README, regenerated with `pnpm screenshots`.
 - Local folder exports (Mirror only): write a Mirror to a folder on disk in the
   Azure DevOps wiki layout, the GitHub wiki layout (with a generated `_Sidebar.md`)
   or plain Markdown with relative links, ready to commit or publish.

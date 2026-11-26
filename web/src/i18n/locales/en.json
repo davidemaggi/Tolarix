@@ -118,7 +118,7 @@
     "secretRemove": "Remove secret",
     "secretKeep": "Keep secret",
     "test": "Test connection",
-    "testOk": "It works.",
+    "testOk": "It works: Tolarix can reach this wiki.",
     "testFailed": "It does not work.",
     "create": "Add connection",
     "created": "Connection \"{{name}}\" added.",
