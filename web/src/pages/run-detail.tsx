@@ -279,7 +279,10 @@ function Warnings({ title, warnings }: { title: string; warnings?: Schemas["Warn
             {w.pageTitle && <span className="font-medium">{w.pageTitle}: </span>}
             {w.message}
             {(w.count ?? 0) > 1 && (
-              <span className="text-muted-foreground"> {t("runs.warningCount", { count: w.count })}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                {t("runs.warningCount", { count: w.count })}
+              </span>
             )}
           </li>
         ))}

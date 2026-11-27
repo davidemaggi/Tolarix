@@ -16,4 +16,4 @@ Working agreement with the product owner:
 
 Verify before claiming done:
 - `cd core && gofmt -l . && go vet ./... && golangci-lint run ./... && go test ./...`
-- `cd web && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- `cd web && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build`
