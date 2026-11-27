@@ -2,10 +2,12 @@ package confluence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -340,7 +342,25 @@ func (c *Confluence) OpenAttachment(ctx context.Context, ref string) (io.ReadClo
 	if err != nil {
 		return nil, err
 	}
+	if webPageInsteadOfFile(ref, resp.Header.Get("Content-Type")) {
+		_ = resp.Body.Close()
+		return nil, errors.New("Confluence answered with a web page instead of the file (a login or single sign-on page?): check that the token can download attachments")
+	}
 	return resp.Body, nil
+}
+
+// webPageInsteadOfFile reports an HTML answer to the download of a file
+// that is not HTML itself, which login and SSO pages give with status 200.
+func webPageInsteadOfFile(ref, contentType string) bool {
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/html") {
+		return false
+	}
+	name := ref
+	if i := strings.IndexAny(name, "?#"); i >= 0 {
+		name = name[:i]
+	}
+	ext := strings.ToLower(path.Ext(name))
+	return ext != ".html" && ext != ".htm"
 }
 
 // Browse lists the children of parentID; "" lists the configured page, or

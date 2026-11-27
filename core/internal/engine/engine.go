@@ -74,6 +74,18 @@ func (e *Engine) Run(ctx context.Context, req Request) (*Report, error) {
 			return req.Source.OpenAttachment(ctx, a.SourceRef)
 		}, &srcWarn)
 		blobs = pipe
+		sources, rendered := 0, 0
+		for _, a := range tree.Attachments {
+			switch a.Role {
+			case model.RoleDiagramSource:
+				sources++
+			case model.RoleRendered:
+				rendered++
+			}
+		}
+		if sources > 0 || rendered > 0 {
+			e.log(ctx, slog.LevelInfo, "diagrams rendered", "diagrams", sources, "images", rendered)
+		}
 	}
 	if req.Options.Banner {
 		banner := BannerText(firstNonEmpty(req.SourceName, "the Master wiki"), req.Options.BannerText)

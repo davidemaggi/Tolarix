@@ -135,3 +135,20 @@ func TestSnapshotFrontMatterOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestWebPageInsteadOfFile(t *testing.T) {
+	for _, tc := range []struct {
+		ref, ct string
+		want    bool
+	}{
+		{"/download/attachments/1/a.png?version=1", "text/html;charset=UTF-8", true},
+		{"/download/attachments/1/diagram?version=2", "text/html", true},
+		{"/download/attachments/1/a.png?version=1", "image/png", false},
+		{"/download/attachments/1/page.html?version=1", "text/html", false},
+		{"/download/attachments/1/a.png", "", false},
+	} {
+		if got := webPageInsteadOfFile(tc.ref, tc.ct); got != tc.want {
+			t.Errorf("webPageInsteadOfFile(%q, %q) = %v", tc.ref, tc.ct, got)
+		}
+	}
+}

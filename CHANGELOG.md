@@ -28,6 +28,8 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 - The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
 - Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
 - Azure DevOps Mirrors link images and attachments relative to the page, so they show in Code wikis published from a folder of the repository (they were broken there). Every page with an attachment changes once.
+- Confluence: an attachment download answered with a web page (login or single sign-on) fails with `attachment-failed` instead of being mirrored as a broken file.
+- The run log says how many diagrams were found and rendered.
 - draw.io Desktop is found where its installers put it (Windows, `~/Applications` on macOS, snap/flatpak on Linux), not only on PATH; on a Linux machine without a display it runs through `xvfb-run`.
 - Tabs and line breaks in page titles become a space (Azure DevOps: `-`) instead of disappearing; affected Azure DevOps pages move once, and Obsidian file names no longer contain tabs.
 
