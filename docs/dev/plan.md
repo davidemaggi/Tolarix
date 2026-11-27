@@ -17,9 +17,9 @@ The original product brief is in [brief.md](brief.md).
 | 5 | Remaining connectors: Confluence Cloud + Azure DevOps Project wiki | done | `develop` |
 | 6 | Built-in scheduler, schedule wizard, `run-due`, run locking end to end | done | `develop` |
 | 7 | Tauri desktop app with Go sidecar, installers | done | `develop` |
-| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | done (v1.0.0 not tagged yet) | `develop` |
+| 8 | Docs (incl. external scheduling guide), hardening, a11y pass, release | done (v1.0.0 tagged 2026-11-27) | `main` |
 | 9 | Local folder exports (Azure DevOps wiki, GitHub wiki, Markdown), before v1.0.0 | done | `develop` |
-| 10 | Confluence conversion fidelity (ideas from confluence-markdown-exporter) | **done, awaiting review** | `develop` |
+| 10 | Confluence conversion fidelity (ideas from confluence-markdown-exporter) | done, tested on a real Data Center | `develop` |
 
 Each milestone ends with tests green and a stop for review before the next one starts.
 
@@ -27,10 +27,9 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 - **M10** (product owner, 2026-11-26, "fai tutti e 7" after a review of confluence-markdown-exporter) was pushed and confirmed working by the product owner on a real Confluence Data Center (1444 pages → Azure DevOps).
 - **Post-M10 run-log fixes** (product owner, 2026-11-27, "procedi con tutto" after reviewing that run's log) and the draw.io fixes that followed are on `develop`: see "Taken after M10". Rendered diagrams now show in Azure DevOps (confirmed 2026-11-27). Still open: the source of the page with `diagram-missing` ("Batch ES").
-- **Next: v1.0.0.** Windows signing is wired (see "Windows code signing"); try `desktop.yml` by hand first. `[Unreleased]` in the changelog sits above an untagged `[1.0.0]`: fold it in before tagging.
+- **v1.0.0** (product owner, 2026-11-27, "procedi"): the Windows signing was tried by hand on `develop` first (signed app, sidecar and installers); `[Unreleased]` was folded into `[1.0.0]`, `develop` merged into `main`, tag `v1.0.0` pushed. Check the draft release (CLI zips with signed `tolarix.exe`, signed installers replacing the unsigned ones, image tags) before publishing it by hand.
 
 - M8 was committed and pushed to `develop` for testing in an environment. The product owner then asked (2026-11-26) for a fix to `scripts/build-core.mjs` on Windows (`go` not on PATH; committed) and for **M9, local folder exports, to ship before v1.0.0**. M9 is committed on `develop` (not pushed). Start the next session by asking for the M9 review.
-- **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
 - Defaults chosen in M2–M8 that are awaiting review are listed under "Taken during M2/…/M8" below. How each wiki is mapped: [connectors.md](connectors.md).
 - M4 and M5 were tested against in-memory fakes of the Confluence (v1 and v2) and ADO APIs only; nothing has been run against a real instance yet. **A smoke test on real wikis (DC, Cloud, ADO code and project wiki) is still the first thing to do with the product owner, ideally before tagging v1.0.0.**
 - Windows and Linux desktop builds have only been set up in CI (`desktop.yml`), not run yet.

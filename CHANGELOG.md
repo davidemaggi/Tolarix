@@ -10,32 +10,7 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 
 ## [Unreleased]
 
-### Added
-
-- Confluence: short links (`/x/…`) work as a connection address and as links to pages of the Master.
-- Confluence: mentions and *profile* macros show the person's name.
-- Confluence: PlantUML (also PlantUML Cloud), Gliffy previews, *View file* / PDF macros, *Include Page* and *Excerpt Include*, subscript and superscript are converted.
-- Confluence: optional front matter with labels (`tags`) and Page Properties, and with page details (id, address, author, dates, version).
-- Tables with merged cells or lists, code or images in their cells are kept as HTML tables (warning `table-html`) instead of being simplified; they are read back into Confluence tables.
-- Image captions are kept as an italic line under the image.
-- Obsidian embedded notes (`![[Note]]`) become *Include Page* macros in Confluence and stay embeds in Obsidian Mirrors; other Mirrors show a link (warning `page-embed`).
-- Confluence: *Page Properties Report* becomes a table and *Content by Label* a list of links to pages of the Master; Confluence Mirrors get the macros back.
-- Run warnings show the page title, and a warning repeated on one page is shown once with a count.
-
-### Changed
-
-- Windows: the installers, the desktop app and `tolarix.exe` in the command-line archives are code-signed.
-- Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
-- The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
-- Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
-- Rendered draw.io diagrams showed as broken images on every Mirror except Confluence: the image inside the link to the `.drawio` file kept its internal address. Links nested in link text are now converted too.
-- Azure DevOps Mirrors link images and attachments relative to the page, so they show in Code wikis published from a folder of the repository (they were broken there). Every page with an attachment changes once.
-- Confluence: an attachment download answered with a web page (login or single sign-on) fails with `attachment-failed` instead of being mirrored as a broken file.
-- The run log says how many diagrams were found and rendered.
-- draw.io Desktop is found where its installers put it (Windows, `~/Applications` on macOS, snap/flatpak on Linux), not only on PATH; on a Linux machine without a display it runs through `xvfb-run`.
-- Tabs and line breaks in page titles become a space (Azure DevOps: `-`) instead of disappearing; affected Azure DevOps pages move once, and Obsidian file names no longer contain tabs.
-
-## [1.0.0] - 2026-11-26
+## [1.0.0] - 2026-11-27
 
 First public release.
 
@@ -56,7 +31,13 @@ First public release.
   existing pages" is on. Edits made on a Mirror are detected, overwritten and reported.
 - Optional notice ("This page is mirrored from …") on every mirrored page.
 - draw.io diagrams kept as `.drawio` attachments and shown as PNG (preview, export
-  server or draw.io Desktop).
+  server or draw.io Desktop). draw.io Desktop is found where its installers put it;
+  on a Linux machine without a display it runs through `xvfb-run`. The run log says
+  how many diagrams were found and rendered.
+- Run warnings name the page; a warning repeated on one page is shown once with a count.
+- Tabs and line breaks in page titles become a space (Azure DevOps: `-`).
+- Azure DevOps mirrors link images and attachments relative to the page, so they
+  also show in Code wikis published from a folder of the repository.
 - Azure DevOps mirrors are written as one Git commit per run. Code wiki mirrors can
   push to another branch, created from the wiki's branch when it does not exist.
 - Links written as the full Azure DevOps address of a page or file of the Master wiki
@@ -69,6 +50,25 @@ First public release.
 - Local folder exports (Mirror only): write a Mirror to a folder on disk in the
   Azure DevOps wiki layout, the GitHub wiki layout (with a generated `_Sidebar.md`)
   or plain Markdown with relative links, ready to commit or publish.
+
+### Confluence conversion
+
+- Storage format to Markdown and back: tables (kept as HTML tables, warning
+  `table-html`, when they have merged cells or lists, code or images in their cells),
+  image captions, mentions and *profile* macros (the person's name), subscript and
+  superscript.
+- Macros: PlantUML (also PlantUML Cloud), Gliffy previews, *View file* / PDF,
+  *Include Page* and *Excerpt Include*; *Page Properties Report* becomes a table and
+  *Content by Label* a list of links to pages of the Master (Confluence Mirrors get
+  the macros back); macros that only work live (*Live Search*, *Recently Updated*,
+  *Change History*, …) are hidden.
+- Optional front matter with labels (`tags`) and Page Properties, and with page
+  details (id, address, author, dates, version).
+- Short links (`/x/…`) work as a connection address and as links to pages of the Master.
+- Obsidian embedded notes (`![[Note]]`) become *Include Page* macros in Confluence and
+  stay embeds in Obsidian Mirrors; other Mirrors show a link (warning `page-embed`).
+- An attachment download answered with a web page (a login or single sign-on page)
+  fails with `attachment-failed` instead of being mirrored as a broken file.
 
 ### Scheduling
 
@@ -86,8 +86,9 @@ First public release.
 - Docker image `ghcr.io/davidemaggi/tolarix` (linux/amd64, linux/arm64), distroless,
   non-root, with a health check.
 - Desktop app for Windows, macOS and Linux (Tauri), with the secret key in the OS
-  keychain. Installers are unsigned in this release.
-- Command line: `flow list|run|import`, `run-due`, `runs list|show`,
+  keychain. The Windows installers and app are code-signed; the macOS installers
+  are not.
+- Command line (`tolarix.exe` code-signed on Windows): `flow list|run|import`, `run-due`, `runs list|show`,
   `connection list|test`, `admin reset-password`, `healthcheck`, `version`, with
   `--json` output and stable exit codes.
 
