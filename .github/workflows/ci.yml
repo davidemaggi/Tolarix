@@ -131,7 +131,8 @@ jobs:
           workspaces: desktop/src-tauri
       # tauri-build checks that the sidecar exists; the checks do not run it.
       - name: Placeholder sidecar
-        run: mkdir -p binaries && touch "binaries/tolarix-$(rustc -vV | sed -n 's/^host: //p')"
+        run: |
+          mkdir -p binaries && touch "binaries/tolarix-$(rustc -vV | sed -n 's/^host: //p')"
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked

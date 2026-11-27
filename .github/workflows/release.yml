@@ -194,6 +194,10 @@ jobs:
     name: Desktop installers
     needs: draft
     uses: ./.github/workflows/desktop.yml
+    # A called workflow gets no more than this: desktop.yml lists this run's artifacts
+    permissions:
+      contents: write
+      actions: read
     secrets: inherit
     with:
       release-id: ${{ needs.draft.outputs.id }}
