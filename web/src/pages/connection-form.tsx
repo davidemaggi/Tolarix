@@ -360,9 +360,7 @@ function ConnectionForm({ kinds, existing }: { kinds: ConnectorKind[]; existing?
                 (test.data.ok ? (
                   <p className="flex items-start gap-2 text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                    <span>
-                      {t("connections.testOk")}
-                    </span>
+                    <span>{t("connections.testOk")}</span>
                   </p>
                 ) : (
                   <p className="flex items-start gap-2 text-destructive">
