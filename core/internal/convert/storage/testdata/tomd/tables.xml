@@ -1,0 +1,2 @@
+<table><colgroup><col/><col/></colgroup><tbody><tr><th><p>Name</p></th><th>Value</th></tr><tr><td><p>a</p><p>b</p></td><td>x | y<br/>z</td></tr><tr><td>only one</td></tr></tbody></table>
+<table><tbody><tr><td>no</td><td>header</td></tr><tr><td colspan="2">merged</td></tr></tbody></table>

@@ -1,0 +1,21 @@
+# Keep the build context small and free of local data and secrets.
+.git
+**/node_modules
+**/.DS_Store
+bin
+dist
+web/dist
+web/test-results
+web/playwright-report
+core/internal/webui/dist/*
+!core/internal/webui/dist/.gitkeep
+desktop/src-tauri/target
+docs
+deploy/vaults
+data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/secret.key
+**/.env
+**/.env.*

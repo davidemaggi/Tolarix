@@ -1,0 +1,37 @@
+== Mirror/.attachments/shot.png ==
+PNG-shot
+== Mirror/.order ==
+Guide
+Other
+What-is-it%3F
+README
+== Mirror/Guide.md ==
+# Guide
+
+[[_TOC_]]
+
+See [Getting Started > Install](/Mirror/Guide/Getting-Started#install) and [Notes](/Mirror/Other/Notes).
+
+::: mermaid
+graph TD
+:::
+== Mirror/Guide/.order ==
+Getting-Started
+== Mirror/Guide/Getting-Started.md ==
+## Install
+
+![shot.png](../.attachments/shot.png =300x)
+
+Back to [Guide](/Mirror/Guide), or [here](#install).
+== Mirror/Other/.order ==
+Notes
+== Mirror/Other/Notes.md ==
+---
+tags:
+  - a
+---
+Some notes.
+== Mirror/README.md ==
+mine
+== Mirror/What-is-it%3F.md ==
+Questions.

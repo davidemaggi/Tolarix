@@ -1,0 +1,9 @@
+# Normalize to LF everywhere: golden-file tests compare bytes.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+*.pdf binary

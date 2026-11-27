@@ -82,6 +82,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ inputs.artifact-id }}
+          merge-multiple: true # by id it would still unpack into a folder named after the artifact
           path: files
       - name: Sign and check
         # Windows PowerShell: always there, unlike PowerShell 7. Its default policy (Restricted on

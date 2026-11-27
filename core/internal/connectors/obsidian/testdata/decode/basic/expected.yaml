@@ -1,0 +1,141 @@
+pages:
+  - id: Archive
+    name: Archive
+    title: Archive
+    order: 0
+    placeholder: true
+  - id: Archive/Old Note
+    parent: Archive
+    name: Old Note
+    title: Old Note
+    order: 0
+    body: |
+      Just an old note, linking [home](tolarix://page/Home).
+  - id: Home
+    name: Home
+    title: Home
+    order: 1
+    meta:
+      - key: aliases
+        value:
+          - Start
+      - key: tags
+        value:
+          - index
+          - home
+      - key: created
+        value: "2026-01-15"
+    attachments:
+      - bc3b15052daba4fb47c99736a01106f316de2756b123bcbfce35d25e7992e1a0
+      - 3eb1bf55ba905cf2610e694f00450e21beaadface1838150399362dd7c062268
+      - 612cc8349ac1d9b7596ceadc15fbb3423aca0f7db1183a21cfd3f448dd551ceb
+    body: |
+      # Welcome
+
+      Links: [Projects](tolarix://page/Projects), [the Alpha project](tolarix://page/Projects%2FAlpha), [Beta > Status](tolarix://page/Projects%2FBeta#Status), [Welcome](tolarix://page/Home#Welcome), [Duplicate](tolarix://page/Notes%2FDuplicate).
+      Markdown links: [beta notes](tolarix://page/Projects%2FBeta#Status), [old](tolarix://page/Archive%2FOld%20Note), [site](https://example.com).
+      Broken: Does Not Exist.
+
+      ![diagram.png](tolarix://att/bc3b15052daba4fb47c99736a01106f316de2756b123bcbfce35d25e7992e1a0 "width=300")
+      ![logo.png](tolarix://att/3eb1bf55ba905cf2610e694f00450e21beaadface1838150399362dd7c062268)
+      ![alt text](tolarix://att/bc3b15052daba4fb47c99736a01106f316de2756b123bcbfce35d25e7992e1a0)
+      See the [spec.pdf](tolarix://att/612cc8349ac1d9b7596ceadc15fbb3423aca0f7db1183a21cfd3f448dd551ceb) and [the spec](tolarix://att/612cc8349ac1d9b7596ceadc15fbb3423aca0f7db1183a21cfd3f448dd551ceb).
+      ![Beta](tolarix://page/Projects%2FBeta)
+
+      > [!note] Remember
+      > Callouts stay as they are.
+
+      | Page | Link |
+      |------|------|
+      | Alpha | [Alpha](tolarix://page/Projects%2FAlpha) |
+
+      ```mermaid
+      graph TD; A-->B
+      ```
+
+      ```
+      [[Not a link]] inside code
+      ```
+
+      Inline `[[also not]]` and %% [[comment]] %% end.
+  - id: Notes
+    name: Notes
+    title: Notes
+    order: 2
+    placeholder: true
+  - id: Notes/Bad Front Matter
+    parent: Notes
+    name: Bad Front Matter
+    title: Bad Front Matter
+    order: 0
+    body: |
+      ---
+      title: [broken
+      ---
+      Body after invalid front matter.
+  - id: Notes/Duplicate
+    parent: Notes
+    name: Duplicate
+    title: Duplicate
+    order: 1
+    body: |
+      # Duplicate in Notes
+  - id: Projects
+    name: Projects
+    title: Projects
+    order: 3
+    body: |
+      # Projects
+
+      Children: [Alpha](tolarix://page/Projects%2FAlpha) and [Beta](tolarix://page/Projects%2FBeta).
+  - id: Projects/Alpha
+    parent: Projects
+    name: Alpha
+    title: Alpha
+    order: 0
+    attachments:
+      - 387828aca8e03bd7471e28694026a8565e6e61dad8220eae01121a8b388fc72f
+    body: |
+      # Alpha
+
+      Logo: ![logo.png](tolarix://att/387828aca8e03bd7471e28694026a8565e6e61dad8220eae01121a8b388fc72f) and the local one ![](tolarix://att/387828aca8e03bd7471e28694026a8565e6e61dad8220eae01121a8b388fc72f).
+      Back to [Home](tolarix://page/Home).
+  - id: Projects/Beta
+    parent: Projects
+    name: Beta
+    title: Beta
+    order: 1
+    body: |
+      # Beta
+
+      ## Status
+
+      Green.
+  - id: Projects/Duplicate
+    parent: Projects
+    name: Duplicate
+    title: Duplicate
+    order: 2
+    body: |
+      # Duplicate in Projects
+attachments:
+  - hash: bc3b15052daba4fb47c99736a01106f316de2756b123bcbfce35d25e7992e1a0
+    name: diagram.png
+    size: 15
+    mediaType: image/png
+    sourceRef: assets/diagram.png
+  - hash: 387828aca8e03bd7471e28694026a8565e6e61dad8220eae01121a8b388fc72f
+    name: logo.png
+    size: 21
+    mediaType: image/png
+    sourceRef: Projects/logo.png
+  - hash: 3eb1bf55ba905cf2610e694f00450e21beaadface1838150399362dd7c062268
+    name: logo.png
+    size: 19
+    mediaType: image/png
+    sourceRef: assets/logo.png
+  - hash: 612cc8349ac1d9b7596ceadc15fbb3423aca0f7db1183a21cfd3f448dd551ceb
+    name: spec.pdf
+    size: 9
+    mediaType: application/pdf
+    sourceRef: assets/spec.pdf

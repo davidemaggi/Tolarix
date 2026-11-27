@@ -1,0 +1,493 @@
+{
+  "app": {
+    "name": "Tolarix",
+    "tagline": "Mantieni sincronizzate le tue wiki",
+    "skipToContent": "Vai al contenuto principale"
+  },
+  "nav": {
+    "label": "Navigazione principale",
+    "dashboard": "Panoramica",
+    "connections": "Connessioni",
+    "flows": "Flussi",
+    "runs": "Esecuzioni",
+    "settings": "Impostazioni"
+  },
+  "theme": {
+    "label": "Tema",
+    "toggle": "Cambia tema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema"
+  },
+  "language": {
+    "label": "Lingua",
+    "toggle": "Cambia lingua",
+    "en": "English",
+    "it": "Italiano"
+  },
+  "common": {
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "save": "Salva modifiche",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "editNamed": "Modifica {{name}}",
+    "deleteNamed": "Elimina {{name}}",
+    "back": "Indietro",
+    "next": "Avanti",
+    "name": "Nome",
+    "actions": "Azioni",
+    "optional": "facoltativo"
+  },
+  "validation": {
+    "required": "Questo campo è obbligatorio.",
+    "tooLong": "Usa al massimo {{max}} caratteri."
+  },
+  "errors": {
+    "generic": "Qualcosa è andato storto. Riprova.",
+    "network": "Il server non risponde. Controlla che Tolarix sia in esecuzione.",
+    "loadFailed": "Impossibile caricare questo contenuto.",
+    "notFound": "Questo elemento non esiste. Forse è stato eliminato.",
+    "invalidPassword": "Password errata.",
+    "tooManyAttempts": "Troppe password errate. Attendi qualche minuto e riprova.",
+    "csrf": "La sessione è scaduta. Ricarica la pagina e riprova.",
+    "running": "Questo flusso è già in esecuzione.",
+    "notHere": "Questa esecuzione è stata avviata da riga di comando e si può fermare solo da lì.",
+    "notRunning": "Questa esecuzione è già terminata.",
+    "nameTaken": "Questo nome è già in uso. Scegline un altro.",
+    "inUse": "È ancora usato da un flusso."
+  },
+  "auth": {
+    "signInTitle": "Accedi",
+    "signInBody": "Inserisci la password di amministratore di questo server Tolarix.",
+    "password": "Password",
+    "passwordRequired": "Inserisci la password.",
+    "signIn": "Accedi",
+    "signOut": "Esci",
+    "forgotHint": "L'hai dimenticata? Esegui \"tolarix admin reset-password\" sul server (in Docker: docker exec -it <container> /tolarix admin reset-password).",
+    "choosePasswordTitle": "Scegli la tua password",
+    "choosePasswordBody": "Hai effettuato l'accesso con una password monouso. Scegli una password personale per continuare.",
+    "choosePasswordSubmit": "Salva e continua",
+    "unreachableTitle": "Server non raggiungibile",
+    "unreachableBody": "Tolarix non risponde. Controlla che sia in esecuzione, poi riprova."
+  },
+  "password": {
+    "current": "Password attuale",
+    "new": "Nuova password",
+    "confirm": "Ripeti la nuova password",
+    "hint": "Almeno {{min}} caratteri. Una breve frase è facile da ricordare e difficile da indovinare.",
+    "submit": "Cambia password",
+    "currentRequired": "Inserisci la password attuale.",
+    "tooShort": "Usa almeno {{min}} caratteri.",
+    "same": "Scegli una password diversa da quella attuale.",
+    "mismatch": "Le due password non coincidono."
+  },
+  "dashboard": {
+    "title": "Panoramica",
+    "intro": "I tuoi flussi di sincronizzazione e l'esito dell'ultima esecuzione.",
+    "emptyTitle": "Ancora nessun flusso",
+    "emptyBody": "Un flusso copia le pagine da una wiki Master a una o più wiki Mirror. Inizia aggiungendo una connessione per ogni wiki.",
+    "stepConnections": "Aggiungi una connessione per ogni wiki",
+    "stepFlow": "Crea un flusso",
+    "stepRun": "Prova una simulazione",
+    "neverRun": "Non ancora eseguito.",
+    "followLive": "Seguila in diretta"
+  },
+  "connections": {
+    "title": "Connessioni",
+    "intro": "Una connessione dice a Tolarix come raggiungere una wiki: Azure DevOps, Confluence o un vault Obsidian.",
+    "new": "Aggiungi connessione",
+    "newIntro": "Scegli il tipo di wiki, poi indica a Tolarix dove si trova. Puoi provare le impostazioni prima di salvare.",
+    "edit": "Modifica connessione",
+    "empty": "Ancora nessuna connessione. Aggiungine una per ogni wiki da sincronizzare.",
+    "kind": "Tipo",
+    "usedBy": "Usata da",
+    "unused": "Non usata",
+    "stepKind": "1. Tipo di wiki",
+    "stepDetails": "2. Dettagli",
+    "kindRequired": "Scegli il tipo di wiki.",
+    "kindFixed": "il tipo di una connessione salvata non si può cambiare.",
+    "canMaster": "Può fare da Master",
+    "canMirror": "Può fare da Mirror",
+    "nameHint": "Un nome che riconoscerai, per esempio \"Wiki del team\".",
+    "secretHint": "Salvato cifrato sul server e mai più mostrato.",
+    "secretStored": "È salvato un segreto. Non viene mai mostrato.",
+    "secretWillBeRemoved": "Il segreto salvato verrà rimosso al salvataggio.",
+    "secretReplace": "Sostituisci segreto",
+    "secretRemove": "Rimuovi segreto",
+    "secretKeep": "Mantieni segreto",
+    "test": "Prova connessione",
+    "testOk": "Funziona: Tolarix raggiunge questa wiki.",
+    "testFailed": "Non funziona.",
+    "create": "Aggiungi connessione",
+    "created": "Connessione \"{{name}}\" aggiunta.",
+    "saved": "Connessione \"{{name}}\" salvata.",
+    "deleteTitle": "Eliminare \"{{name}}\"?",
+    "deleteBody": "Tolarix dimentica questa connessione e il suo segreto. La wiki non viene modificata.",
+    "deleteInUse": "È usata da {{flows}}. Rimuovila da quei flussi o eliminali prima.",
+    "deleted": "Connessione \"{{name}}\" eliminata."
+  },
+  "connectorKinds": {
+    "obsidian": "Una cartella di file Markdown (un vault Obsidian) su questo server.",
+    "azure-devops-code": "Una wiki pubblicata da un repository Git in Azure DevOps (Services o Server). Tolarix legge e invia commit tramite la REST API.",
+    "confluence-dc": "Uno spazio Confluence Data Center o Server, oppure una pagina con tutto quello che contiene.",
+    "azure-devops-project": "La wiki di progetto di un progetto Azure DevOps (Services o Server). Tolarix legge e invia commit al suo repository Git nascosto tramite la REST API.",
+    "confluence-cloud": "Uno spazio Confluence Cloud (atlassian.net), oppure una pagina con tutto quello che contiene.",
+    "folder-azure-devops": "Una cartella su questa macchina, scritta con la struttura di una wiki Azure DevOps (file .order, .attachments). Puoi fare commit in un repository di wiki Azure DevOps o tenerla come export.",
+    "folder-github-wiki": "Una cartella su questa macchina, scritta con la struttura di una wiki GitHub (nomi di pagina piatti, _Sidebar.md). Clona lì il repository della wiki e fai push del risultato.",
+    "folder-markdown": "Una cartella su questa macchina con file Markdown semplici e link relativi, per generatori di siti statici (MkDocs, Docusaurus), wiki GitLab o un repository."
+  },
+  "connectorFields": {
+    "obsidian": {
+      "path": "Cartella del vault",
+      "pathHint": "La cartella sul server che contiene il vault, per esempio /vaults/team. In Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella nel vault",
+        "folderHint": "Le pagine copiate finiscono in questa cartella. Lasciala vuota per usare la radice del vault."
+      }
+    },
+    "azure-devops-code": {
+      "url": "Indirizzo della wiki o del repository",
+      "urlHint": "Apri la wiki in Azure DevOps e copia l'indirizzo dal browser (…/_wiki/wikis/<nome>), oppure la cartella del repository da cui è pubblicata (…/_git/<repo>?path=/docs).",
+      "token": "Personal access token",
+      "tokenHint": "Crealo in Azure DevOps da User settings → Personal access tokens, con lo scope Code (Read & write).",
+      "location": {
+        "folder": "Cartella nella wiki",
+        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit.",
+        "branch": "Branch",
+        "branchHint": "Facoltativo. Invia le modifiche a questo branch invece che a quello della wiki, per esempio wiki/mirror. Se non esiste, la prima esecuzione lo crea partendo dal branch della wiki. La wiki lo mostra solo se lo pubblichi come versione della wiki."
+      }
+    },
+    "confluence-dc": {
+      "url": "Indirizzo dello spazio o della pagina",
+      "urlHint": "Apri lo spazio (o la pagina da cui partire) in Confluence e copia l'indirizzo dal browser.",
+      "token": "Personal access token o password",
+      "tokenHint": "Un personal access token (Profilo → Personal Access Tokens). Se indichi un nome utente, qui va la sua password.",
+      "username": "Nome utente",
+      "usernameHint": "Solo per l'accesso con password. Lascialo vuoto se usi un personal access token.",
+      "properties": "Etichette e Page Properties nel front matter",
+      "propertiesHint": "Quando questo spazio è il Master: le etichette di ogni pagina diventano tag e la sua tabella Page Properties diventa voci del front matter.",
+      "pageDetails": "Dettagli della pagina nel front matter",
+      "pageDetailsHint": "Quando questo spazio è il Master: id, indirizzo, autore, date di creazione e modifica, ultimo autore delle modifiche e versione di ogni pagina finiscono nel suo front matter.",
+      "location": {
+        "parent": "Pagina padre",
+        "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la radice dello spazio."
+      }
+    },
+    "azure-devops-project": {
+      "url": "Indirizzo della wiki di progetto",
+      "urlHint": "Apri la wiki di progetto in Azure DevOps e copia l'indirizzo dal browser (…/<progetto>/_wiki).",
+      "token": "Personal access token",
+      "tokenHint": "Crealo in Azure DevOps da User settings → Personal access tokens, con lo scope Code (Read & write).",
+      "location": {
+        "folder": "Cartella nella wiki",
+        "folderHint": "Le pagine copiate finiscono in questa cartella, per esempio Mirrors/Team. Lasciala vuota per usare la radice della wiki. Ogni esecuzione viene inviata come un unico commit."
+      }
+    },
+    "confluence-cloud": {
+      "url": "Indirizzo dello spazio o della pagina",
+      "urlHint": "Apri lo spazio (o la pagina da cui partire) in Confluence e copia l'indirizzo dal browser, per esempio https://tuo-sito.atlassian.net/wiki/spaces/DOC/overview.",
+      "email": "Email",
+      "emailHint": "L'email dell'account Atlassian a cui appartiene l'API token.",
+      "token": "API token",
+      "tokenHint": "Crea un API token classico su id.atlassian.com → Security → API tokens. I token con scope non sono ancora supportati.",
+      "properties": "Etichette e Page Properties nel front matter",
+      "propertiesHint": "Quando questo spazio è il Master: le etichette di ogni pagina diventano tag e la sua tabella Page Properties diventa voci del front matter.",
+      "pageDetails": "Dettagli della pagina nel front matter",
+      "pageDetailsHint": "Quando questo spazio è il Master: id, indirizzo, autore, date di creazione e modifica, ultimo autore delle modifiche e versione di ogni pagina finiscono nel suo front matter.",
+      "location": {
+        "parent": "Pagina padre",
+        "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la home page dello spazio."
+      }
+    },
+    "folder-azure-devops": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
+      }
+    },
+    "folder-github-wiki": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
+      }
+    },
+    "folder-markdown": {
+      "path": "Cartella di export",
+      "pathHint": "La cartella su questa macchina in cui esportare, per esempio /exports/wiki. Deve già esistere; in Docker deve essere un volume montato.",
+      "location": {
+        "folder": "Cartella dentro la cartella di export",
+        "folderHint": "Le pagine copiate finiscono in questa sottocartella. Lasciala vuota per usare direttamente la cartella di export. Ogni esecuzione scrive tutte le modifiche alla fine."
+      }
+    }
+  },
+  "flows": {
+    "title": "Flussi",
+    "intro": "Un flusso replica una wiki Master, o una sua parte, in una o più wiki Mirror.",
+    "new": "Nuovo flusso",
+    "empty": "Ancora nessun flusso.",
+    "lastRun": "Ultima esecuzione",
+    "runNow": "Esegui ora",
+    "runNowFor": "Esegui ora: {{name}}",
+    "dryRun": "Simulazione",
+    "dryRunFor": "Simulazione: {{name}}",
+    "dryRunHint": "Mostra cosa cambierebbe senza modificare nulla.",
+    "disabled": "Disattivato",
+    "enabled": "Attivo",
+    "state": "Stato",
+    "mirroredTo": "replicato in",
+    "runningBy": "In esecuzione su {{holder}}.",
+    "busyHint": "Attendi la fine dell'esecuzione.",
+    "scopeSelected_one": "{{count}} pagina o cartella selezionata",
+    "scopeSelected_other": "{{count}} pagine o cartelle selezionate",
+    "scopeExcluded_one": "{{count}} esclusa",
+    "scopeExcluded_other": "{{count}} escluse",
+    "recentRuns": "Esecuzioni recenti",
+    "allRuns": "Tutte le esecuzioni di questo flusso",
+    "deleteTitle": "Eliminare \"{{name}}\"?",
+    "deleteBody": "Il flusso e lo storico delle esecuzioni vengono eliminati. Le pagine già copiate nei Mirror restano dove sono.",
+    "deleted": "Flusso \"{{name}}\" eliminato."
+  },
+  "flowWizard": {
+    "newTitle": "Nuovo flusso",
+    "editTitle": "Modifica flusso",
+    "intro": "Scegli cosa copiare, dove copiarlo e come.",
+    "steps": "Passaggi",
+    "step": {
+      "master": "Master",
+      "scope": "Cosa replicare",
+      "mirrors": "Mirror",
+      "options": "Opzioni",
+      "schedule": "Pianificazione",
+      "review": "Riepilogo"
+    },
+    "master": "Wiki Master",
+    "masterHint": "La wiki dove si scrive. Tolarix la legge soltanto.",
+    "masterRequired": "Scegli la wiki Master.",
+    "masterFixed": "Il Master di un flusso salvato non si può cambiare. Crea un nuovo flusso per replicare un'altra wiki.",
+    "enabled": "Attivo",
+    "enabledHint": "Un flusso disattivato si può comunque eseguire a mano.",
+    "scopeMode": "Cosa replicare",
+    "scope": {
+      "all": "Tutta la wiki",
+      "allHint": "Tutte le pagine. Togli la spunta qui sotto per escluderne alcune.",
+      "selected": "Solo le pagine selezionate",
+      "selectedHint": "Spunta le pagine o le cartelle da replicare; tutto ciò che contengono è incluso."
+    },
+    "scopeRequired": "Spunta almeno una pagina o cartella.",
+    "scopeTree": "Pagine del Master",
+    "expand": "Mostra le pagine in {{name}}",
+    "selected": "selezionata",
+    "noChildren": "Nessuna pagina qui.",
+    "emptyMaster": "La wiki Master non ha ancora pagine.",
+    "included": "Selezionate",
+    "excluded": "Escluse",
+    "nothingSelected": "ancora nulla",
+    "removeChoice": "Rimuovi {{name}}",
+    "excludedList": "Escluse: {{list}}",
+    "mirrorsHint": "I Mirror ricevono una copia del Master. Le pagine che Tolarix vi crea vengono sovrascritte a ogni esecuzione.",
+    "mirrorN": "Mirror {{n}}",
+    "mirrorWiki": "Wiki",
+    "chooseWiki": "Scegli una wiki",
+    "addMirror": "Aggiungi un altro Mirror",
+    "removeMirror": "Rimuovi Mirror {{n}}",
+    "mirrorRequired": "Aggiungi almeno un Mirror.",
+    "mirrorWikiRequired": "Scegli una wiki.",
+    "mirrorIsMaster": "Un Mirror non può essere la wiki Master stessa.",
+    "mirrorDuplicate": "È lo stesso del Mirror {{n}}.",
+    "noConnections": "Ancora nessuna connessione adatta.",
+    "deletePolicy": "Quando una pagina viene rimossa dal Master",
+    "policy": {
+      "archive": "Archiviala nei Mirror",
+      "archiveHint": "La pagina viene spostata in un'area di archivio, così non si perde nulla. Consigliato.",
+      "delete": "Eliminala nei Mirror",
+      "deleteHint": "La pagina viene eliminata anche dai Mirror.",
+      "keep": "Lasciala nei Mirror",
+      "keepHint": "La pagina resta nei Mirror e non viene più aggiornata."
+    },
+    "attachments": "Copia gli allegati",
+    "attachmentsHint": "Immagini e file usati dalle pagine.",
+    "attachmentsOn": "Gli allegati vengono copiati",
+    "attachmentsOff": "Gli allegati non vengono copiati",
+    "banner": "Aggiungi un avviso alle pagine copiate",
+    "bannerHint": "Una breve nota in cima a ogni pagina copiata invita i lettori a modificare il Master.",
+    "bannerOn": "Le pagine copiate riportano un avviso",
+    "bannerOff": "Nessun avviso sulle pagine copiate",
+    "bannerText": "Testo dell'avviso",
+    "bannerTextHint": "Lascialo vuoto per il testo predefinito. \"{master}\" diventa il nome del Master.",
+    "bannerDefault": "Questa pagina è una copia di {{master}}. Le modifiche fatte qui verranno sovrascritte.",
+    "adopt": "Prendi in carico le pagine esistenti",
+    "adoptHint": "Se un Mirror ha già una pagina esattamente dove va una pagina copiata, Tolarix la aggiorna invece di fermarsi con un conflitto.",
+    "adoptOn": "Le pagine esistenti vengono prese in carico",
+    "create": "Crea flusso",
+    "created": "Flusso \"{{name}}\" creato. Prova una simulazione per vedere cosa farà.",
+    "saved": "Flusso \"{{name}}\" salvato."
+  },
+  "runs": {
+    "title": "Esecuzioni",
+    "intro": "Tutte le esecuzioni e le simulazioni, dalla più recente.",
+    "run": "Esecuzione",
+    "started": "Avvio",
+    "flow": "Flusso",
+    "status": "Stato",
+    "changes": "Modifiche",
+    "trigger": "Avviata da",
+    "duration": "Durata",
+    "kind": "Tipo",
+    "allFlows": "Tutti i flussi",
+    "anyStatus": "Qualsiasi stato",
+    "allKinds": "Esecuzioni e simulazioni",
+    "realOnly": "Solo esecuzioni",
+    "dryOnly": "Solo simulazioni",
+    "empty": "Ancora nessuna esecuzione.",
+    "noMatch": "Nessuna esecuzione corrisponde a questi filtri.",
+    "loadMore": "Mostra esecuzioni precedenti",
+    "dryRun": "Simulazione",
+    "dryRunNote": "Questa era una simulazione: mostra cosa cambierebbe. Non è stato modificato nulla.",
+    "tookTime": "durata {{duration}}",
+    "cancel": "Ferma esecuzione",
+    "cancelRequested": "Arresto dell'esecuzione…",
+    "report": "Resoconto",
+    "log": "Log",
+    "reportPending": "Il resoconto sarà pronto al termine dell'esecuzione. Nel frattempo segui il log.",
+    "pagesInScope_one": "{{count}} pagina del Master inclusa.",
+    "pagesInScope_other": "{{count}} pagine del Master incluse.",
+    "masterWarnings": "Avvisi sul Master",
+    "warningCount_one": "(una volta)",
+    "warningCount_other": "({{count}} volte)",
+    "warnings": "Avvisi",
+    "showUnchanged": "Mostra le pagine invariate",
+    "mirrorTitle": "Mirror: {{name}}",
+    "noPageChanges": "Nessuna pagina modificata.",
+    "change": "Modifica",
+    "page": "Pagina",
+    "details": "Dettagli",
+    "movedFromTo": "{{from}} → {{to}}",
+    "attachmentsSummary": "Allegati: {{uploaded}} caricati, {{deleted}} eliminati.",
+    "logEmpty": "Ancora nessuna riga di log.",
+    "logTruncated": "Vengono mostrate solo le ultime 5.000 righe."
+  },
+  "logState": {
+    "connecting": "Connessione al log in diretta…",
+    "live": "In diretta",
+    "ended": "L'esecuzione è terminata.",
+    "error": "Il log in diretta non è disponibile."
+  },
+  "runStatus": {
+    "running": "In corso",
+    "succeeded": "Riuscita",
+    "partial": "Riuscita in parte",
+    "failed": "Fallita",
+    "cancelled": "Fermata"
+  },
+  "runTrigger": {
+    "manual": "Interfaccia web",
+    "schedule": "Pianificazione",
+    "cli": "Riga di comando",
+    "run-due": "Riga di comando (run-due)"
+  },
+  "opKind": {
+    "create": "Creata",
+    "update": "Aggiornata",
+    "move": "Spostata",
+    "delete": "Eliminata",
+    "archive": "Archiviata",
+    "keep": "Mantenuta",
+    "unchanged": "Invariata",
+    "conflict": "Conflitto"
+  },
+  "counts": {
+    "none": "Nessuna modifica",
+    "created_one": "{{count}} creata",
+    "created_other": "{{count}} create",
+    "updated_one": "{{count}} aggiornata",
+    "updated_other": "{{count}} aggiornate",
+    "moved_one": "{{count}} spostata",
+    "moved_other": "{{count}} spostate",
+    "deleted_one": "{{count}} eliminata",
+    "deleted_other": "{{count}} eliminate",
+    "archived_one": "{{count}} archiviata",
+    "archived_other": "{{count}} archiviate",
+    "failed_one": "{{count}} fallita",
+    "failed_other": "{{count}} fallite"
+  },
+  "countLabels": {
+    "created": "Create",
+    "updated": "Aggiornate",
+    "moved": "Spostate",
+    "archived": "Archiviate",
+    "deleted": "Eliminate",
+    "unchanged": "Invariate",
+    "failed": "Fallite",
+    "attachmentsUploaded": "File caricati"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "intro": "Il tuo account e questo server.",
+    "about": "Questo server",
+    "version": "Versione",
+    "timezone": "Fuso orario",
+    "appearanceHint": "Tema e lingua si trovano nella barra in alto e vengono ricordati da questo browser.",
+    "account": "Account",
+    "changePassword": "Cambia password",
+    "changePasswordHint": "Gli altri browser collegati come amministratore vengono disconnessi.",
+    "passwordChanged": "Password cambiata."
+  },
+  "status": {
+    "server": "Server",
+    "checking": "Verifica in corso…",
+    "ok": "In esecuzione, versione {{version}}",
+    "unreachable": "Non raggiungibile"
+  },
+  "notFound": {
+    "title": "Pagina non trovata",
+    "body": "Questa pagina non esiste.",
+    "back": "Torna alla panoramica"
+  },
+  "schedule": {
+    "tabs": "Tipo di pianificazione",
+    "simple": "Semplice",
+    "advanced": "Avanzata (espressione cron)",
+    "kindLabel": "Quando deve essere eseguito?",
+    "kind": {
+      "manual": "Solo quando lo avvio manualmente",
+      "interval": "Ogni N minuti o ore",
+      "daily": "Ogni giorno alle…",
+      "weekly": "In questi giorni della settimana alle…",
+      "monthly": "Ogni mese il giorno… alle…"
+    },
+    "every": "Ogni",
+    "unit": "Unità",
+    "units": {
+      "minutes": "minuti",
+      "hours": "ore"
+    },
+    "time": "Alle",
+    "days": "Giorni della settimana",
+    "day": "Giorno del mese",
+    "dayHint": "I mesi senza questo giorno vengono saltati.",
+    "expr": "Espressione cron",
+    "exprHint": "Cinque campi: minuto, ora, giorno del mese, mese, giorno della settimana (es. 0 7 * * 1-5), oppure @daily, @weekly, @monthly. Gli orari sono nel fuso orario qui sotto.",
+    "timezone": "Fuso orario",
+    "timezoneHint": "Gli orari della pianificazione sono in questo fuso orario. Predefinito: quello del server ({{tz}}).",
+    "builtIn": "Esegui con lo scheduler integrato",
+    "builtInHint": "Disattivalo per avviare questo flusso dal tuo cron con \"tolarix run-due\".",
+    "builtInOff": "Si esegue solo tramite \"tolarix run-due\"",
+    "preview": "Anteprima",
+    "cron": "Cron",
+    "nextRuns": "Prossime esecuzioni",
+    "manualPreview": "Si esegue solo quando lo avvii, con Esegui ora o \"tolarix run …\".",
+    "loading": "Calcolo in corso…",
+    "daysRequired": "Scegli almeno un giorno della settimana.",
+    "exprRequired": "Inserisci un'espressione cron.",
+    "timezoneRequired": "Inserisci un fuso orario.",
+    "nextRun": "Prossima esecuzione",
+    "noNextRun": "Non pianificato",
+    "disabledNote": "Il flusso è disattivato, quindi non si esegue da solo."
+  }
+}

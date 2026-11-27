@@ -1,0 +1,25 @@
+- Home (id=1001 order=0)
+    | # Intro
+    | 
+    | Welcome. See [Backend Guide](tolarix://page/1005) and [setup](tolarix://page/1005#Getting%20Started).
+    | 
+    | ![photo.png](tolarix://att/d7ffca10adb56aae70c0d0f044bf34d7438e10fbd57c9856ee606ab60a9429f5)
+    | 
+    | ![arch](tolarix://att/744e877c89f8120856e2f44f08f25178dffcf73a98efff73d65f1836323c2f2b)
+    | 
+    | > [!info]
+    | > Note Holidays
+    @ photo.png d7ffca10 role="" type=application/octet-stream
+    @ arch.drawio 744e877c role="diagram-source" type=application/vnd.jgraph.mxfile
+    @ arch.png 4f564f14 role="" type=image/png
+  - Backend Guide (id=1005 order=0)
+      | ## Getting Started
+      | 
+      | Back to [Home](tolarix://page/1001).
+    - Deploy (id=1006 order=0)
+        | Steps
+  - FAQ (id=1007 order=1)
+      | Questions
+- Other Root (id=1008 order=1)
+    | Elsewhere
+warning 1001 link-outside-master

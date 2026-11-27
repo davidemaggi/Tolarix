@@ -173,6 +173,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.sign-app.outputs.artifact-id }}
+          merge-multiple: true # by id it would still unpack into a folder named after the artifact
           path: desktop/src-tauri
       # --no-binary-patching: the bundler would otherwise write the bundle type into
       # tolarix-desktop.exe and break its signature (only the updater, unused, reads it)
@@ -229,6 +230,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.package-signed.outputs.artifact }}
+          merge-multiple: true # by id it would still unpack into a folder named after the artifact
           path: installers
       - id: list
         run: |
@@ -257,6 +259,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.sign-installer.outputs.artifact-id }}
+          merge-multiple: true # by id it would still unpack into a folder named after the artifact
           path: signed
       # Same names as the unsigned installers tauri-action uploaded: --clobber replaces them
       - name: Upload

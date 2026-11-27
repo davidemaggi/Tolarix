@@ -1,0 +1,31 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Tolarix",
+  "identifier": "io.github.davidemaggi.tolarix",
+  "build": {
+    "frontendDist": "../splash",
+    "beforeDevCommand": "node scripts/sidecar.mjs",
+    "beforeBuildCommand": "node scripts/sidecar.mjs"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "One-way wiki sync across Azure DevOps, Confluence and Obsidian",
+    "license": "GPL-3.0-only",
+    "externalBin": ["binaries/tolarix"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
