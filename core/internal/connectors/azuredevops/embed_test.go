@@ -26,7 +26,7 @@ func TestEncodePageEmbedAndHTMLTable(t *testing.T) {
 	for _, want := range []string{
 		"[Intro](/Guide/Getting-Started)",
 		`<a href="/Guide/Getting-Started#set-up">set up</a> <a>gone</a>`,
-		`<img src="/.attachments/a.png" alt="a.png">`,
+		`<img src="./.attachments/a.png" alt="a.png">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
@@ -34,5 +34,20 @@ func TestEncodePageEmbedAndHTMLTable(t *testing.T) {
 	}
 	if strings.Join(codes, ",") != "page-embed,link-out-of-scope" {
 		t.Errorf("warnings = %v", codes)
+	}
+}
+
+func TestRelativePath(t *testing.T) {
+	for _, tc := range []struct{ from, to, want string }{
+		{"", ".attachments/a.png", "./.attachments/a.png"},
+		{"Mirror", "Mirror/.attachments/a.png", "./.attachments/a.png"},
+		{"Mirror/Guide", "Mirror/.attachments/a.png", "../.attachments/a.png"},
+		{"Mirror/Guide/Deep", "Mirror/.attachments/a.png", "../../.attachments/a.png"},
+		{"Other", "Mirror/.attachments/a.png", "../Mirror/.attachments/a.png"},
+		{"Mirror/.attachments", "Mirror/.attachments/a.png", "./a.png"},
+	} {
+		if got := relativePath(tc.from, tc.to); got != tc.want {
+			t.Errorf("relativePath(%q, %q) = %q, want %q", tc.from, tc.to, got, tc.want)
+		}
 	}
 }

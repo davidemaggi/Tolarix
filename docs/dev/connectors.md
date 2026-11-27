@@ -151,7 +151,9 @@ repository). A project wiki address is rejected with a pointer to the Project wi
 - `.order` in a folder lists its pages (names without `.md`), one per line. Pages it does
   not list follow alphabetically.
 - Attachments: the Master's `/.attachments/` (or any non-Markdown file a page links to).
-  Mirrors use `<target folder>/.attachments/`.
+  Mirrors use `<target folder>/.attachments/`, linked relative to the page
+  (`../.attachments/a.png`): a Code wiki published from a repository folder resolves
+  `/…` page links from the wiki root but not images. Page links stay absolute.
 - Links are absolute from the wiki root (`/Folder/Page-Name#anchor`) or relative to the
   page. Anchors are the heading in lower case, spaces as `-`, other characters
   percent-encoded (`Install & Run` → `#install-%26-run`). The reader also accepts the

@@ -20,7 +20,7 @@ Getting-Started
 == Mirror/Guide/Getting-Started.md ==
 ## Install
 
-![shot.png](/Mirror/.attachments/shot.png =300x)
+![shot.png](../.attachments/shot.png =300x)
 
 Back to [Guide](/Mirror/Guide), or [here](#install).
 == Mirror/Other/.order ==

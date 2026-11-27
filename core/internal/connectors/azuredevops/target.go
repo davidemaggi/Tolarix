@@ -224,7 +224,7 @@ func htmlLinkDest(p *model.Page, l *connectors.Layout, w connectors.Warner, u st
 	}
 	if hash, ok := model.ParseAttachmentLink(u); ok {
 		if key, found := l.Attachments[hash]; found {
-			return "/" + linkPath(key), true
+			return attachmentLink(p, l, key), true
 		}
 		w.Warn(connectors.Warning{PageID: p.ID, Code: "attachment-not-mirrored",
 			Message: "an attachment used inside a table is not copied to this mirror; only its description is shown"})
@@ -266,7 +266,7 @@ func encodeLink(p *model.Page, l *connectors.Layout, w connectors.Warner, image 
 				Message: fmt.Sprintf("the attachment %q is not copied to this mirror; only its name is shown", text)})
 			return text, true
 		}
-		dest := "/" + linkPath(key)
+		dest := attachmentLink(p, l, key)
 		if image {
 			if width, ok := strings.CutPrefix(title, "width="); ok && width != "" {
 				if !strings.Contains(width, "x") {
@@ -279,6 +279,34 @@ func encodeLink(p *model.Page, l *connectors.Layout, w connectors.Warner, image 
 		return "[" + text + "](" + dest + titleSuffix(title) + ")", true
 	}
 	return "", false
+}
+
+// attachmentLink is the path of an attachment relative to the page's folder
+// (./.attachments/a.png, ../.attachments/a.png). Absolute paths would
+// break images in a code wiki published from a folder of its repository:
+// the wiki resolves /… page links from its root, but not images.
+func attachmentLink(p *model.Page, l *connectors.Layout, key string) string {
+	from := parentDir(strings.TrimSuffix(l.Pages[p.ID].Key, "/"))
+	return linkPath(relativePath(from, key))
+}
+
+// relativePath is the path of to (relative to the wiki root) seen from the
+// folder from (also relative to the wiki root).
+func relativePath(from, to string) string {
+	var fs, ts []string
+	if from != "" {
+		fs = strings.Split(from, "/")
+	}
+	ts = strings.Split(to, "/")
+	i := 0
+	for i < len(fs) && i < len(ts)-1 && fs[i] == ts[i] {
+		i++
+	}
+	up := strings.Repeat("../", len(fs)-i)
+	if up == "" {
+		up = "./"
+	}
+	return up + strings.Join(ts[i:], "/")
 }
 
 func titleSuffix(t string) string {
