@@ -26,7 +26,8 @@ Each milestone ends with tests green and a stop for review before the next one s
 ### Where we left off (2026-11-27)
 
 - **M10** (product owner, 2026-11-26, "fai tutti e 7" after a review of confluence-markdown-exporter) was pushed and confirmed working by the product owner on a real Confluence Data Center (1444 pages → Azure DevOps).
-- **Post-M10 run-log fixes** (product owner, 2026-11-27, "procedi con tutto" after reviewing that run's log) are committed on `develop`, not pushed: see "Taken after M10". Ask the product owner to rerun that flow: the second run should be mostly `unchanged` (another `updated=1444` would be a determinism bug), and for the source of a page with `diagram-missing`.
+- **Post-M10 run-log fixes** (product owner, 2026-11-27, "procedi con tutto" after reviewing that run's log) and the draw.io fixes that followed are on `develop`: see "Taken after M10". Rendered diagrams now show in Azure DevOps (confirmed 2026-11-27). Still open: the source of the page with `diagram-missing` ("Batch ES").
+- **Next: v1.0.0.** The product owner is setting up a runner for code signing (2026-11-27); signing was a "not in v1" default until now, so decide whether v1.0.0 waits for it. `[Unreleased]` in the changelog sits above an untagged `[1.0.0]`: fold it in before tagging.
 
 - M8 was committed and pushed to `develop` for testing in an environment. The product owner then asked (2026-11-26) for a fix to `scripts/build-core.mjs` on Windows (`go` not on PATH; committed) and for **M9, local folder exports, to ship before v1.0.0**. M9 is committed on `develop` (not pushed). Start the next session by asking for the M9 review.
 - **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
@@ -174,6 +175,11 @@ Taken after M10 (from a real Data Center run log, 2026-11-27):
 - **Labels are read whenever a page uses those macros**, even with the front matter options off: one extra request per page in that case. The front matter still follows the options.
 - **Warnings are collapsed** per page, code and message, with a `count`, and carry `pageTitle` (filled by the engine from the tree; API fields `pageTitle`, `count`).
 - **`filetree.CleanTitle`**: tabs and line breaks in titles become a space, other control characters are dropped; used by the ADO, Obsidian and folder encoders. ADO pages whose titles had a tab move once (`3.1.5Reporter…` → `3.1.5-Reporter…`).
+- **draw.io Desktop is found where its installers put it** (Program Files, `%LOCALAPPDATA%\Programs`, `/Applications` and `~/Applications`, `/opt/drawio`, snap, flatpak) after `TOLARIX_DRAWIO_CLI` and the PATH; on Linux without a display it runs through `xvfb-run -a`, and the "no renderer" error lists where it looked.
+- **Azure DevOps attachment links are relative to the page** (`./.attachments/a.png`, `../.attachments/a.png`) so images show in Code wikis published from a subfolder; page links stay absolute. Every ADO page with attachments changes once. The ADO folder export follows.
+- **Confluence downloads that answer with a web page** (`text/html` for a non-HTML file: login or SSO page) fail with a clear error instead of being stored as the file.
+- **The run log has a render summary** (`diagrams rendered`, with the number of diagram sources and rendered images).
+- **Links nested in link text are converted** (`mdscan.ReplaceFuncAt` rewrites the inner `![…](…)` of `[![…](…)](…)` first). Rendered diagrams were broken images on every Mirror except Confluence; confirmed fixed by the product owner on the real run (2026-11-27).
 
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. CLI archives built by `scripts/package-cli.mjs` in `release.yml` (GoReleaser was planned, not needed).
