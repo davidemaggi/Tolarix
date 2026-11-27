@@ -5,7 +5,8 @@
 //     "<name>.png" beside "<name>"); no rendering needed;
 //  2. the render cache in the data directory;
 //  3. an export server (TOLARIX_DRAWIO_EXPORT_URL, e.g. jgraph/export-server);
-//  4. draw.io Desktop (TOLARIX_DRAWIO_CLI, "drawio" on PATH, or the macOS app).
+//  4. draw.io Desktop (TOLARIX_DRAWIO_CLI, "drawio" on PATH, or where its
+//     installers put it on Windows, macOS and Linux).
 package drawio
 
 import (
@@ -47,9 +48,6 @@ const (
 
 var pngMagic = []byte("\x89PNG\r\n\x1a\n")
 
-// macApp is where draw.io Desktop installs on macOS.
-const macApp = "/Applications/draw.io.app/Contents/MacOS/draw.io"
-
 // Renderer is the draw.io renderer.
 type Renderer struct {
 	// CacheDir keeps rendered PNGs by source hash ("" = no cache).
@@ -65,6 +63,8 @@ type Renderer struct {
 
 	lookPath func(string) (string, error)
 	stat     func(string) (os.FileInfo, error)
+	getenv   func(string) string
+	goos     string
 }
 
 var _ render.Renderer = (*Renderer)(nil)
@@ -144,7 +144,8 @@ func (r *Renderer) Render(ctx context.Context, in render.Input) ([]render.Output
 	}
 
 	if len(tried) == 0 {
-		return nil, fmt.Errorf("no draw.io renderer is configured: set %s to an export server (see docker-compose.yml) or install draw.io Desktop", EnvExportURL)
+		return nil, fmt.Errorf("no draw.io renderer is configured: set %s to an export server (see docker-compose.yml), or install draw.io Desktop (looked on PATH and in %s) or set %s to its executable",
+			EnvExportURL, strings.Join(r.installPaths(), ", "), EnvCLI)
 	}
 	return nil, errors.New(strings.Join(tried, "; "))
 }
@@ -219,29 +220,79 @@ func (r *Renderer) exportServer(ctx context.Context, src []byte) ([]byte, error)
 	return b, nil
 }
 
+func (r *Renderer) env(key string) string {
+	if r.getenv != nil {
+		return r.getenv(key)
+	}
+	return os.Getenv(key)
+}
+
+func (r *Renderer) os() string {
+	if r.goos != "" {
+		return r.goos
+	}
+	return runtime.GOOS
+}
+
+func (r *Renderer) look(name string) (string, error) {
+	if r.lookPath != nil {
+		return r.lookPath(name)
+	}
+	return exec.LookPath(name)
+}
+
+// installPaths are where the draw.io Desktop installers put the executable
+// (none of them adds it to PATH on Windows or macOS).
+func (r *Renderer) installPaths() []string {
+	var out []string
+	add := func(base string, elem ...string) {
+		if base != "" {
+			out = append(out, filepath.Join(append([]string{base}, elem...)...))
+		}
+	}
+	switch r.os() {
+	case "windows":
+		add(r.env("ProgramFiles"), "draw.io", "draw.io.exe")
+		add(r.env("ProgramFiles(x86)"), "draw.io", "draw.io.exe")
+		add(r.env("LOCALAPPDATA"), "Programs", "draw.io", "draw.io.exe") // per-user install
+	case "darwin":
+		out = append(out, "/Applications/draw.io.app/Contents/MacOS/draw.io")
+		add(r.env("HOME"), "Applications", "draw.io.app", "Contents", "MacOS", "draw.io")
+	case "linux":
+		// .deb/.rpm, snap and flatpak; apps started from a desktop launcher
+		// often lack /snap/bin or the flatpak exports on PATH.
+		out = append(out, "/opt/drawio/drawio", "/snap/bin/drawio", "/var/lib/flatpak/exports/bin/com.jgraph.drawio.desktop")
+		add(r.env("HOME"), ".local", "share", "flatpak", "exports", "bin", "com.jgraph.drawio.desktop")
+	}
+	return out
+}
+
 // findCLI returns the draw.io Desktop executable, or "".
 func (r *Renderer) findCLI() string {
 	if r.CLI != "" {
 		return r.CLI
 	}
-	look, stat := r.lookPath, r.stat
-	if look == nil {
-		look = exec.LookPath
-	}
+	stat := r.stat
 	if stat == nil {
 		stat = os.Stat
 	}
 	for _, name := range []string{"drawio", "draw.io"} {
-		if p, err := look(name); err == nil {
+		if p, err := r.look(name); err == nil {
 			return p
 		}
 	}
-	if runtime.GOOS == "darwin" {
-		if _, err := stat(macApp); err == nil {
-			return macApp
+	for _, p := range r.installPaths() {
+		if fi, err := stat(p); err == nil && !fi.IsDir() {
+			return p
 		}
 	}
 	return ""
+}
+
+// headless reports a Linux machine without a display, where Electron
+// cannot start on its own.
+func (r *Renderer) headless() bool {
+	return r.os() == "linux" && r.env("DISPLAY") == "" && r.env("WAYLAND_DISPLAY") == ""
 }
 
 // desktop runs draw.io Desktop's command-line export.
@@ -258,8 +309,18 @@ func (r *Renderer) desktop(ctx context.Context, cli string, src []byte) ([]byte,
 		return nil, err
 	}
 	args := []string{"--export", "--format", "png", "--border", "10", "--output", outFile, in}
-	if runtime.GOOS == "linux" {
+	if r.os() == "linux" {
 		args = append(args, "--no-sandbox") // Electron refuses to start as root in containers otherwise
+	}
+	hint := ""
+	if r.headless() {
+		// Without a display Electron exits at once: use a virtual one.
+		if xvfb, err := r.look("xvfb-run"); err == nil {
+			args = append([]string{"-a", cli}, args...)
+			cli = xvfb
+		} else {
+			hint = " (this machine has no display: install xvfb so xvfb-run is on PATH, or use an export server)"
+		}
 	}
 	cmd := exec.CommandContext(ctx, cli, args...) //nolint:gosec // the executable is configured by the operator
 	var stderr bytes.Buffer
@@ -270,13 +331,13 @@ func (r *Renderer) desktop(ctx context.Context, cli string, src []byte) ([]byte,
 			msg = msg[:300] + "…"
 		}
 		if msg != "" {
-			return nil, fmt.Errorf("%w: %s", err, msg)
+			return nil, fmt.Errorf("%w: %s%s", err, msg, hint)
 		}
-		return nil, err
+		return nil, fmt.Errorf("%w%s", err, hint)
 	}
 	b, err := os.ReadFile(outFile) //nolint:gosec // our temp file
 	if err != nil {
-		return nil, fmt.Errorf("no PNG was written: %w", err)
+		return nil, fmt.Errorf("no PNG was written%s: %w", hint, err)
 	}
 	if !isPNG(b) {
 		return nil, errors.New("the output is not a PNG image")

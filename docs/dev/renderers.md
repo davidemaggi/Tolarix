@@ -57,8 +57,8 @@ Tried in this order; the first that works wins:
 2. **Export server** (optional, configurable URL): the official
    `jgraph/export-server` image can run as a sidecar in `docker-compose`; Tolarix
    POSTs the XML and gets a PNG back.
-3. **draw.io Desktop CLI** (optional, desktop installs): if `drawio` is on PATH,
-   run `drawio --export --format png`.
+3. **draw.io Desktop CLI** (optional, desktop installs): `drawio` on PATH or the
+   installers' default folders, run as `drawio --export --format png`.
 
 If none is available, the mirror gets the `.drawio` attachment plus a warning
 that explains how to enable 2 or 3.
@@ -88,8 +88,12 @@ that explains how to enable 2 or 3.
   (2) the cache `<dataDir>/cache/render/<xx>/<sha256(drawio|version|source hash)>.png`;
   (3) `TOLARIX_DRAWIO_EXPORT_URL`: a form POST (`format=png`, `xml=…`, `border=10`) as
   accepted by `jgraph/export-server` (see the commented service in `deploy/docker-compose.yml`);
-  (4) draw.io Desktop: `TOLARIX_DRAWIO_CLI`, else `drawio` / `draw.io` on PATH, else the macOS app,
+  (4) draw.io Desktop: `TOLARIX_DRAWIO_CLI`, else `drawio` / `draw.io` on PATH, else the installers'
+  folders (Windows `%ProgramFiles%`, `%ProgramFiles(x86)%`, `%LOCALAPPDATA%\Programs`; macOS
+  `/Applications`, `~/Applications`; Linux `/opt/drawio`, `/snap/bin`, flatpak exports),
   run as `--export --format png --border 10 --output out.png in.drawio` (plus `--no-sandbox` on Linux).
+  On Linux without `DISPLAY`/`WAYLAND_DISPLAY` it runs through `xvfb-run -a` when available; otherwise
+  the error suggests installing xvfb. The "nothing configured" warning lists the folders searched.
   Every result is checked for the PNG signature. Rendered PNGs (3, 4) are cached; previews are not.
 - Each step has a 60 s timeout. When nothing works, the warning names what was tried, or says
   how to enable a renderer when none is configured.

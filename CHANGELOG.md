@@ -27,6 +27,7 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 - Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
 - The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
 - Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
+- draw.io Desktop is found where its installers put it (Windows, `~/Applications` on macOS, snap/flatpak on Linux), not only on PATH; on a Linux machine without a display it runs through `xvfb-run`.
 - Tabs and line breaks in page titles become a space (Azure DevOps: `-`) instead of disappearing; affected Azure DevOps pages move once, and Obsidian file names no longer contain tabs.
 
 ## [1.0.0] - 2026-11-26

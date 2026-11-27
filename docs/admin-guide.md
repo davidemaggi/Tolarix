@@ -111,7 +111,7 @@ Everything is set through environment variables. The defaults suit Docker.
 | `TOLARIX_COOKIE_SECURE` | `auto` | `auto` (Secure cookie when the request is HTTPS), `true`, `false` |
 | `TOLARIX_LOG_LEVEL` / `TOLARIX_LOG_FORMAT` | `info` / `text` | `debug`, `info`, `warn`, `error` / `text`, `json`. Logs go to stderr. |
 | `TOLARIX_DRAWIO_EXPORT_URL` | none | draw.io export server (see below) |
-| `TOLARIX_DRAWIO_CLI` | `drawio` on PATH | draw.io Desktop executable (not in the Docker image) |
+| `TOLARIX_DRAWIO_CLI` | found automatically | draw.io Desktop executable (not in the Docker image) |
 | `TOLARIX_HEALTHCHECK_URL` | `http://127.0.0.1:$TOLARIX_PORT/healthz` | used by `tolarix healthcheck` |
 
 ## The data folder
@@ -258,7 +258,13 @@ uses, in order:
 2. its render cache;
 3. an export server: run `jgraph/export-server` next to Tolarix and set
    `TOLARIX_DRAWIO_EXPORT_URL=http://drawio-export:8000/`. Do not publish its port;
-4. draw.io Desktop on the same machine (`TOLARIX_DRAWIO_CLI`; not available in the Docker image).
+4. draw.io Desktop on the same machine (not available in the Docker image). Tolarix
+   finds it on PATH and where its installers put it: `C:\Program Files\draw.io\`
+   or `%LOCALAPPDATA%\Programs\draw.io\` on Windows, `/Applications` or
+   `~/Applications` on macOS, `/opt/drawio`, snap or flatpak on Linux. Anywhere
+   else, set `TOLARIX_DRAWIO_CLI` to the executable. On a Linux server without a
+   display, install `xvfb` (Tolarix runs draw.io through `xvfb-run`) or use an
+   export server.
 
 With none of them, the Mirror links to the `.drawio` file and the run report
 explains how to enable rendering.

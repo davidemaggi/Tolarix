@@ -28,6 +28,7 @@ func isolated(t *testing.T) *Renderer {
 	return &Renderer{
 		lookPath: func(string) (string, error) { return "", notFound },
 		stat:     func(string) (os.FileInfo, error) { return nil, notFound },
+		getenv:   func(string) string { return "" },
 	}
 }
 
@@ -175,5 +176,94 @@ func TestNewReadsTheEnvironment(t *testing.T) {
 	}
 	if r.findCLI() != "/opt/drawio" {
 		t.Fatal("configured CLI not used")
+	}
+}
+
+type fileInfo struct{ os.FileInfo }
+
+func (fileInfo) IsDir() bool { return false }
+
+func TestFindsTheInstalledDesktopApp(t *testing.T) {
+	env := map[string]string{
+		"ProgramFiles": `C:\Program Files`, "LOCALAPPDATA": `C:\Users\u\AppData\Local`, "HOME": "/home/u",
+	}
+	for _, tc := range []struct{ goos, installed string }{
+		{"windows", filepath.Join(`C:\Program Files`, "draw.io", "draw.io.exe")},
+		{"windows", filepath.Join(`C:\Users\u\AppData\Local`, "Programs", "draw.io", "draw.io.exe")},
+		{"darwin", "/Applications/draw.io.app/Contents/MacOS/draw.io"},
+		{"darwin", filepath.Join("/home/u", "Applications", "draw.io.app", "Contents", "MacOS", "draw.io")},
+		{"linux", "/opt/drawio/drawio"},
+		{"linux", "/snap/bin/drawio"},
+	} {
+		r := isolated(t)
+		r.goos = tc.goos
+		r.getenv = func(k string) string { return env[k] }
+		if got := r.findCLI(); got != "" {
+			t.Fatalf("%s: found %q with nothing installed", tc.goos, got)
+		}
+		r.stat = func(p string) (os.FileInfo, error) {
+			if p == tc.installed {
+				return fileInfo{}, nil
+			}
+			return nil, errors.New("not found")
+		}
+		if got := r.findCLI(); got != tc.installed {
+			t.Errorf("%s: findCLI = %q, want %q", tc.goos, got, tc.installed)
+		}
+	}
+}
+
+func TestNoRendererSaysWhereItLooked(t *testing.T) {
+	r := isolated(t)
+	r.goos = "darwin"
+	_, err := r.Render(context.Background(), input(source(), nil))
+	if err == nil || !strings.Contains(err.Error(), "/Applications/draw.io.app") || !strings.Contains(err.Error(), EnvCLI) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestHeadlessLinuxUsesXvfb(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a shell script as a fake xvfb-run")
+	}
+	dir := t.TempDir()
+	xvfb := filepath.Join(dir, "xvfb-run")
+	// The fake checks it wraps draw.io, then writes a PNG to --output.
+	script := `#!/bin/sh
+[ "$1" = "-a" ] && [ "$2" = "/opt/drawio/drawio" ] || { echo "bad args: $*" >&2; exit 2; }
+out=""
+while [ $# -gt 0 ]; do
+  case "$1" in --output) out="$2"; shift;; esac
+  shift
+done
+printf '\211PNG\r\n\032\nxvfb' > "$out"
+`
+	if err := os.WriteFile(xvfb, []byte(script), 0o700); err != nil { //nolint:gosec // test executable
+		t.Fatal(err)
+	}
+	r := isolated(t)
+	r.goos = "linux"
+	r.CLI = "/opt/drawio/drawio"
+	r.lookPath = func(name string) (string, error) {
+		if name == "xvfb-run" {
+			return xvfb, nil
+		}
+		return "", errors.New("not found")
+	}
+	outs, err := r.Render(context.Background(), input(source(), nil))
+	if err != nil || !strings.HasSuffix(string(outs[0].Content), "xvfb") {
+		t.Fatalf("outs = %+v, %v", outs, err)
+	}
+
+	// With a display, draw.io runs directly; without xvfb-run the error says why.
+	r.getenv = func(k string) string { return map[string]string{"DISPLAY": ":0"}[k] }
+	if r.headless() {
+		t.Fatal("a display was set")
+	}
+	r.getenv = func(string) string { return "" }
+	r.lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	r.CLI = filepath.Join(dir, "missing-drawio")
+	if _, err := r.Render(context.Background(), input(source(), nil)); err == nil || !strings.Contains(err.Error(), "xvfb") {
+		t.Fatalf("err = %v", err)
 	}
 }
