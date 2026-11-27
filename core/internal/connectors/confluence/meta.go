@@ -17,7 +17,7 @@ var detailKeys = []string{"confluence_id", "confluence_url", "author", "created"
 // infos reads the history and labels of every page, when an option needs
 // them. A page whose details cannot be read gets a warning and no details.
 func (s *snapshot) infos(pages []fetched) map[string]*pageInfo {
-	if !s.c.opts.Properties && !s.c.opts.PageDetails {
+	if !s.c.opts.Properties && !s.c.opts.PageDetails && !needsLabels(pages) {
 		return nil
 	}
 	out := make([]*pageInfo, len(pages))
@@ -49,6 +49,17 @@ func (s *snapshot) infos(pages []fetched) map[string]*pageInfo {
 		}
 	}
 	return m
+}
+
+// needsLabels tells whether a page lists other pages by label (Page
+// Properties Report, Content by Label), which needs the labels of every page.
+func needsLabels(pages []fetched) bool {
+	for _, f := range pages {
+		if strings.Contains(f.page.Body, `ac:name="detailssummary"`) || strings.Contains(f.page.Body, `ac:name="contentbylabel"`) {
+			return true
+		}
+	}
+	return false
 }
 
 // meta is the front matter of a page: labels as tags, page details, then

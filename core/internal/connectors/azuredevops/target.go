@@ -155,7 +155,7 @@ func (f *Format) Layout(tree *model.Tree, root string, w connectors.Warner) *con
 		for _, c := range tree.Children(parentID) {
 			want := firstNonEmpty(c.Name, c.Title, "Untitled")
 			name := uniqueName(EncodeName(want), used)
-			if DecodeName(name) != strings.TrimSpace(want) {
+			if DecodeName(name) != filetree.CleanTitle(want) {
 				w.Warn(connectors.Warning{PageID: c.ID, Code: "renamed",
 					Message: fmt.Sprintf("the page %q is saved as %q because the original name is not allowed or already taken", c.Title, name)})
 			}

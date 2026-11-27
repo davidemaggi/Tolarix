@@ -123,9 +123,32 @@ type Buffering interface {
 
 // Warning is a non-fatal issue recorded in the run report.
 type Warning struct {
-	PageID  string `json:"pageId,omitempty"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	PageID string `json:"pageId,omitempty"`
+	// PageTitle is filled in by the engine from the Master tree.
+	PageTitle string `json:"pageTitle,omitempty"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	// Count is how many times the same warning came up on the page (set by
+	// Collapse; 0 or 1 means once).
+	Count int `json:"count,omitempty"`
+}
+
+// Collapse merges repeated warnings (same page, code and message) into one
+// with a Count, keeping the order in which they first came up.
+func Collapse(list []Warning) []Warning {
+	type key struct{ page, code, msg string }
+	at := map[key]int{}
+	out := make([]Warning, 0, len(list))
+	for _, w := range list {
+		k := key{w.PageID, w.Code, w.Message}
+		if i, ok := at[k]; ok {
+			out[i].Count = max(out[i].Count, 1) + 1
+			continue
+		}
+		at[k] = len(out)
+		out = append(out, w)
+	}
+	return out
 }
 
 // Warner collects warnings.

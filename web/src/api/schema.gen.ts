@@ -603,8 +603,11 @@ export interface components {
     };
     Warning: {
       pageId?: string;
+      pageTitle?: string;
       code: string;
       message: string;
+      /** @description How many times the same warning came up on the page; absent means once */
+      count?: number;
     };
     Op: {
       /** @enum {string} */

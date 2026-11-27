@@ -17,6 +17,9 @@
 //   - Complex tables:       an HTML <table> block (merged cells, lists or code in cells) on
 //     lines without blank lines; links and images inside keep canonical URLs in href/src
 //   - Subscript, superscript: <sub>…</sub> and <sup>…</sup>
+//   - Live Confluence macros: a MacroStart comment holding the macro's storage XML (base64),
+//     what the macro showed when read (a table, a list, or nothing), then MacroEnd. Other
+//     targets show only the content; a Confluence mirror puts the live macro back.
 //
 // Fragments carry the raw heading text (percent-escaped), not a slug: each
 // target slugs headings its own way.
@@ -24,10 +27,12 @@ package model
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"sort"
+	"strings"
 )
 
 // TOCMarker is the canonical "table of contents here" line. It is an HTML
@@ -40,6 +45,36 @@ const (
 	ExcerptStart = "<!-- tolarix:excerpt -->"
 	ExcerptEnd   = "<!-- tolarix:excerpt-end -->"
 )
+
+// MacroStart (followed by the base64 storage XML of a macro and " -->") and
+// MacroEnd surround the content a live Confluence macro showed when it was
+// read. Being comments, they are hidden on other targets.
+const (
+	MacroStart = "<!-- tolarix:macro "
+	MacroEnd   = "<!-- tolarix:macro-end -->"
+)
+
+// MacroMarker builds the MacroStart line for the storage XML of a macro.
+func MacroMarker(xml string) string {
+	return MacroStart + base64.StdEncoding.EncodeToString([]byte(xml)) + " -->"
+}
+
+// ParseMacroMarker reads a MacroStart line back into the macro's storage XML.
+func ParseMacroMarker(line string) (string, bool) {
+	rest, ok := strings.CutPrefix(strings.TrimSpace(line), MacroStart)
+	if !ok {
+		return "", false
+	}
+	rest, ok = strings.CutSuffix(rest, " -->")
+	if !ok {
+		return "", false
+	}
+	b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(rest))
+	if err != nil || len(b) == 0 {
+		return "", false
+	}
+	return string(b), true
+}
 
 // ExcerptTitle is the link title of a page embed that shows only the
 // embedded page's excerpt.

@@ -295,15 +295,16 @@ A dry-run report has the same shape and says that nothing was changed.
 | Unchanged | nothing to do (hidden by default: **Show unchanged pages**) |
 | Conflict | the page could not be written; the details say why and how to fix it |
 
-**Warnings** list everything that did not convert perfectly, per page. The most
-common ones:
+**Warnings** list everything that did not convert perfectly, per page, with the
+page title. The same warning repeated on one page is shown once with a count
+(for example "(12 times)"). The most common ones:
 
 | Warning | Meaning |
 |---|---|
 | `mirror-edited` | someone edited the Mirror copy; Tolarix overwrote it |
 | `broken-link`, `link-out-of-scope`, `link-outside-master` | the link target is missing, outside the flow's scope or outside the Master; the link became plain text |
 | `title-renamed` | Confluence titles are unique per space: the page got its parent's title in brackets, then a number |
-| `renamed` | the name is not allowed on the Mirror (illegal characters, reserved names, clashes); it was changed |
+| `renamed` | the name is not allowed on the Mirror (illegal characters, reserved names, clashes); it was changed. Tabs and line breaks in a title become a space (Azure DevOps: a `-`) |
 | `attachment-missing`, `attachment-not-mirrored` | a referenced file was not found, or attachments are off |
 | `render-failed`, `diagram-missing` | a draw.io diagram could not be turned into a PNG (see the admin guide) |
 | `confluence-macro`, `macro-unsupported` | a Confluence macro has no equivalent on the Mirror |
@@ -336,7 +337,7 @@ never drops content silently. Developer details:
 |---|---|
 | Obsidian → Confluence | Callouts become info/tip/note/warning panels; foldable callouts become *expand*. Mermaid and PlantUML become a `code` block titled `mermaid` or `plantuml` (Data Center has no built-in Mermaid). Embedded notes (`![[Note]]`) become *Include Page* macros. HTML tables (`<table>`) become Confluence tables, merged cells included. Front matter is not mapped (Confluence labels are not supported yet). Master order is lost: Confluence orders child pages itself. |
 | Obsidian → Azure DevOps | Callouts become a bold label in a quote (`> **Tip:** …`), because the wiki has no callouts. Mermaid becomes `::: mermaid`. Front matter is kept. Page order follows the Master (`.order`). |
-| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` become callouts (Azure DevOps: bold label). `expand` becomes a foldable callout. `toc` is kept as a table of contents. `children`, `pagetree` and `anchor` are dropped. `status` becomes its text in brackets (`[DONE]`), Jira issues become the issue key. Mentions and *profile* macros show the person's name. PlantUML becomes a `plantuml` code block; Gliffy diagrams show their PNG preview; *View file* / *PDF* macros become a link to the attachment. *Include Page* and *Excerpt Include* become an embedded note in Obsidian and a link elsewhere (`page-embed`). Tables with merged cells or lists, code or images in their cells are kept as HTML tables (`table-html`); images inside them may not show in Obsidian. Image captions become an italic line under the image. Short links (`/x/…`) to pages of the Master become page links. Any other macro becomes a `confluence-macro` code block holding its XML, with a warning. Confluence Cloud whiteboards, databases and embeds are skipped; folders become title-only pages. |
+| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` become callouts (Azure DevOps: bold label). `expand` becomes a foldable callout. `toc` is kept as a table of contents. `children`, `pagetree` and `anchor` are dropped. `status` becomes its text in brackets (`[DONE]`), Jira issues become the issue key. Mentions and *profile* macros show the person's name. PlantUML becomes a `plantuml` code block; Gliffy diagrams show their PNG preview; *View file* / *PDF* macros become a link to the attachment. *Include Page* and *Excerpt Include* become an embedded note in Obsidian and a link elsewhere (`page-embed`). Tables with merged cells or lists, code or images in their cells are kept as HTML tables (`table-html`); images inside them may not show in Obsidian. Image captions become an italic line under the image. Short links (`/x/…`) to pages of the Master become page links. *Page Properties Report* becomes the table Confluence shows and *Content by Label* a list of page links; both only list pages of the Master, and Tolarix reads the labels it needs on its own. Macros that only work live in Confluence (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, *Page Tree Search*, *Create from Template*, *Labels List*) are hidden without a warning. On a Confluence Mirror all of these are written back as macros. Any other macro becomes a `confluence-macro` code block holding its XML, with a warning. Confluence Cloud whiteboards, databases and embeds are skipped; folders become title-only pages. |
 | Confluence → Confluence | Macros, including unknown ones, are written back as they were. Titles are made unique per space. |
 | Azure DevOps → others | `[[_TOC_]]` becomes the target's table of contents. `[[_TOSP_]]` (subpages list) is dropped with a warning. Image sizes (`=300x200`) are kept where the target supports them. |
 | any → Obsidian | Links are written as wikilinks with the full vault path. Attachments go to the vault's attachment folder (or `attachments/`); files with the same name but different content get a short hash in the name. Obsidian has no manual page order: pages appear alphabetically. |

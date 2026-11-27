@@ -661,9 +661,13 @@ type TestResult struct {
 
 // Warning defines model for Warning.
 type Warning struct {
-	Code    string  `json:"code"`
-	Message string  `json:"message"`
-	PageId  *string `json:"pageId,omitempty"`
+	Code string `json:"code"`
+
+	// Count How many times the same warning came up on the page; absent means once
+	Count     *int    `json:"count,omitempty"`
+	Message   string  `json:"message"`
+	PageId    *string `json:"pageId,omitempty"`
+	PageTitle *string `json:"pageTitle,omitempty"`
 }
 
 // Id defines model for Id.

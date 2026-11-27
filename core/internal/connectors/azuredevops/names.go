@@ -21,12 +21,7 @@ var nameEncoder = strings.NewReplacer(
 
 // EncodeName turns a page title into its file name (without .md).
 func EncodeName(title string) string {
-	title = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cs, r) {
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(title))
+	title = filetree.CleanTitle(title)
 	if title == "" {
 		title = "Untitled"
 	}

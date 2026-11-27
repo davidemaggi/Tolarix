@@ -189,12 +189,6 @@ func attachmentName(name string) string {
 	return base + ext
 }
 
-// cleanTitle drops control characters and surrounding spaces.
-func cleanTitle(s string) string {
-	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cs, r) {
-			return -1
-		}
-		return r
-	}, s))
-}
+// cleanTitle turns tabs and line breaks into spaces, drops other control
+// characters and trims surrounding spaces.
+func cleanTitle(s string) string { return filetree.CleanTitle(s) }

@@ -358,6 +358,8 @@
     "pagesInScope_one": "{{count}} Master page in scope.",
     "pagesInScope_other": "{{count}} Master pages in scope.",
     "masterWarnings": "Warnings about the Master",
+    "warningCount_one": "(once)",
+    "warningCount_other": "({{count}} times)",
     "warnings": "Warnings",
     "showUnchanged": "Show unchanged pages",
     "mirrorTitle": "Mirror: {{name}}",

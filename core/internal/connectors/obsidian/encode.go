@@ -26,9 +26,9 @@ func layout(tree *model.Tree, root string, attSetting string, w connectors.Warne
 			used[strings.ToLower(r)] = true
 		}
 		for _, c := range tree.Children(parentID) {
-			base := sanitizeName(firstNonEmpty(c.Name, c.Title, "Untitled"))
-			name := uniqueName(base, used)
-			if name != firstNonEmpty(c.Name, c.Title, "Untitled") {
+			want := filetree.CleanTitle(firstNonEmpty(c.Name, c.Title, "Untitled"))
+			name := uniqueName(sanitizeName(want), used)
+			if name != want {
 				w.Warn(connectors.Warning{PageID: c.ID, Code: "renamed",
 					Message: fmt.Sprintf("the page %q is saved as %q because the original name is not allowed or already taken", c.Title, name)})
 			}
@@ -218,7 +218,7 @@ var nameReplacer = strings.NewReplacer(
 )
 
 func sanitizeName(s string) string {
-	s = strings.TrimSpace(nameReplacer.Replace(s))
+	s = filetree.CleanTitle(nameReplacer.Replace(s))
 	s = strings.TrimRight(s, ". ") // Windows rejects trailing dots and spaces
 	if s == "" {
 		s = "Untitled"

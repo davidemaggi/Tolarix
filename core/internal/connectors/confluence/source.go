@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,7 +48,7 @@ func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.
 		snap.raw[f.page.ID] = f.page.Body
 		snap.titles[f.page.ID] = f.page.Title
 	}
-	infos := snap.infos(pages)
+	snap.info = snap.infos(pages)
 	for _, f := range pages {
 		p := &model.Page{ID: f.page.ID, ParentID: f.parent, Name: f.page.Title, Title: f.page.Title, Order: f.order,
 			Placeholder: f.page.Folder}
@@ -59,7 +60,7 @@ func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.
 		}
 		p.Body = body
 		if !f.page.Folder {
-			p.Meta = snap.meta(f.page, infos[f.page.ID], env)
+			p.Meta = snap.meta(f.page, snap.info[f.page.ID], env)
 		}
 		snap.tree.Add(p)
 	}
@@ -78,6 +79,8 @@ type snapshot struct {
 	heads   map[string][]string
 	atts    map[string]map[string]attachment // page id -> filename -> attachment
 	users   *users
+	info    map[string]*pageInfo // page id -> history and labels, when needed
+	props   map[string][]storage.Property
 }
 
 func (s *snapshot) attachments(pageID string) map[string]attachment {
@@ -139,6 +142,44 @@ func (e *pageEnv) SelfID() string { return e.page.ID }
 // UserName shows mentions as display names (storage.UserResolver).
 func (e *pageEnv) UserName(accountID, userKey, username string) (string, bool) {
 	return e.snap.users.name(userRef{AccountID: accountID, UserKey: userKey, Username: username})
+}
+
+// PagesWithLabels lists the pages of the snapshot with the labels
+// (storage.LabelIndex).
+func (e *pageEnv) PagesWithLabels(labels []string, all bool) []storage.PageRef {
+	var out []storage.PageRef
+	for id, info := range e.snap.info {
+		have := map[string]bool{}
+		for _, l := range info.Labels {
+			have[strings.ToLower(l)] = true
+		}
+		hits := 0
+		for _, l := range labels {
+			if have[l] {
+				hits++
+			}
+		}
+		if hits == 0 || (all && hits < len(labels)) {
+			continue
+		}
+		out = append(out, storage.PageRef{ID: id, Title: e.snap.titles[id], Created: info.CreatedAt, Updated: info.UpdatedAt})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// PagePropertiesOf reads the Page Properties of a page of the snapshot
+// (storage.LabelIndex).
+func (e *pageEnv) PagePropertiesOf(pageID string) []storage.Property {
+	if e.snap.props == nil {
+		e.snap.props = map[string][]storage.Property{}
+	}
+	if p, ok := e.snap.props[pageID]; ok {
+		return p
+	}
+	p := storage.PageProperties(e.snap.raw[pageID], e)
+	e.snap.props[pageID] = p
+	return p
 }
 
 func (e *pageEnv) PageID(space, title string) (string, bool) {

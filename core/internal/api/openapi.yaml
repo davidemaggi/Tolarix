@@ -764,8 +764,10 @@ components:
       required: [code, message]
       properties:
         pageId: { type: string }
+        pageTitle: { type: string }
         code: { type: string }
         message: { type: string }
+        count: { type: integer, description: "How many times the same warning came up on the page; absent means once" }
     Op:
       type: object
       required: [kind, sourceId, title]

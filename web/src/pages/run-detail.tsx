@@ -266,6 +266,7 @@ function TargetSection({
 }
 
 function Warnings({ title, warnings }: { title: string; warnings?: Schemas["Warning"][] }) {
+  const { t } = useTranslation();
   if (!warnings?.length) return null;
   return (
     <details className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
@@ -274,7 +275,13 @@ function Warnings({ title, warnings }: { title: string; warnings?: Schemas["Warn
       </summary>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         {warnings.map((w, i) => (
-          <li key={i}>{w.message}</li>
+          <li key={i}>
+            {w.pageTitle && <span className="font-medium">{w.pageTitle}: </span>}
+            {w.message}
+            {(w.count ?? 0) > 1 && (
+              <span className="text-muted-foreground"> {t("runs.warningCount", { count: w.count })}</span>
+            )}
+          </li>
         ))}
       </ul>
     </details>

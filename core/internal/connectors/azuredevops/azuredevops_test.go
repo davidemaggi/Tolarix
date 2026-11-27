@@ -88,6 +88,9 @@ func TestNames(t *testing.T) {
 	if got := EncodeName("Aux"); got != "%41ux" {
 		t.Errorf("EncodeName(Aux) = %q, want a name Windows accepts", got)
 	}
+	if got := EncodeName("3.1.5\tReporter Info"); got != "3.1.5-Reporter-Info" {
+		t.Errorf("EncodeName(tab) = %q, want the tab kept as a separator", got)
+	}
 	if got := slug("Install & Run (v2)!"); got != "install-%26-run-%28v2%29%21" {
 		t.Errorf("slug = %q", got)
 	}

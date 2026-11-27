@@ -111,6 +111,27 @@ func TestSnapshotFrontMatterOptions(t *testing.T) {
 			if got := metaOf(tree.Pages[id]); got != "" {
 				t.Errorf("meta with options off = %q", got)
 			}
+
+			// A Page Properties Report reads the labels even with the options
+			// off, and lists Spec with its properties.
+			f.addPage("Report", "", `<ac:structured-macro ac:name="detailssummary"><ac:parameter ac:name="label">api</ac:parameter></ac:structured-macro>`)
+			tree, err = c.Snapshot(context.Background(), connectors.Discard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var report *model.Page
+			for _, p := range tree.Pages {
+				if p.Title == "Report" {
+					report = p
+				}
+			}
+			row := "| [Spec](tolarix://page/" + id + ") | Ada Lovelace | Done | clashes with the labels |"
+			if report == nil || !strings.Contains(report.Body, row) {
+				t.Errorf("report body = %q, want row %q", report.Body, row)
+			}
+			if got := metaOf(tree.Pages[id]); got != "" {
+				t.Errorf("meta with options off, labels read = %q", got)
+			}
 		})
 	}
 }

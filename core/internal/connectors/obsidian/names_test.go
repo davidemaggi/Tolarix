@@ -16,6 +16,7 @@ func TestSanitizeNameAvoidsInvalidFileNames(t *testing.T) {
 		"COM0":             "COM0",
 		"Console":          "Console",
 		"LPT10":            "LPT10",
+		"3.1.5\tReporter":  "3.1.5 Reporter",
 	} {
 		if got := sanitizeName(in); got != want {
 			t.Errorf("sanitizeName(%q) = %q, want %q", in, got, want)

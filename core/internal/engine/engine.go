@@ -83,9 +83,9 @@ func (e *Engine) Run(ctx context.Context, req Request) (*Report, error) {
 			}
 		}
 	}
-	rep.Warnings = srcWarn.List
-	for _, w := range srcWarn.List {
-		e.log(ctx, slog.LevelWarn, w.Message, "page", w.PageID, "code", w.Code)
+	rep.Warnings = collapse(srcWarn.List, full)
+	for _, w := range rep.Warnings {
+		e.log(ctx, slog.LevelWarn, w.Message, warnAttrs(w)...)
 	}
 
 	for _, t := range req.Targets {
@@ -112,7 +112,7 @@ func (e *Engine) runTarget(ctx context.Context, req Request, tree *model.Tree, t
 	fail := func(format string, a ...any) TargetReport {
 		tr.Error = fmt.Sprintf(format, a...)
 		e.log(ctx, slog.LevelError, "mirror failed", "target", t.Name, "error", tr.Error)
-		tr.Warnings = ws.List
+		tr.Warnings = collapse(ws.List, tree)
 		return tr
 	}
 	e.log(ctx, slog.LevelInfo, "planning mirror", "target", t.Name)
@@ -185,9 +185,9 @@ func (e *Engine) runTarget(ctx context.Context, req Request, tree *model.Tree, t
 	}
 	tr.Ops, tr.Attachments = ops, attOps
 	tr.Counts = count(ops, attOps)
-	tr.Warnings = ws.List
-	for _, w := range ws.List {
-		e.log(ctx, slog.LevelWarn, w.Message, "target", t.Name, "page", w.PageID, "code", w.Code)
+	tr.Warnings = collapse(ws.List, tree)
+	for _, w := range tr.Warnings {
+		e.log(ctx, slog.LevelWarn, w.Message, append([]any{"target", t.Name}, warnAttrs(w)...)...)
 	}
 	e.log(ctx, slog.LevelInfo, "mirror done", "target", t.Name, "dry_run", req.DryRun,
 		"created", tr.Counts.Created, "updated", tr.Counts.Updated, "moved", tr.Counts.Moved,
@@ -590,4 +590,27 @@ func firstNonEmpty(vs ...string) string {
 		}
 	}
 	return ""
+}
+
+// collapse merges repeated warnings and names the page of each one.
+func collapse(list []connectors.Warning, tree *model.Tree) []connectors.Warning {
+	out := connectors.Collapse(list)
+	for i := range out {
+		if p := tree.Pages[out[i].PageID]; p != nil && out[i].PageTitle == "" {
+			out[i].PageTitle = p.Title
+		}
+	}
+	return out
+}
+
+func warnAttrs(w connectors.Warning) []any {
+	attrs := []any{"page", w.PageID}
+	if w.PageTitle != "" {
+		attrs = append(attrs, "title", w.PageTitle)
+	}
+	attrs = append(attrs, "code", w.Code)
+	if w.Count > 1 {
+		attrs = append(attrs, "count", w.Count)
+	}
+	return attrs
 }

@@ -807,6 +807,17 @@ func (c *toMD) macro(n *node) []string {
 		return nil
 	case inlineMacros[name]:
 		return c.paragraph([]*node{n})
+	case liveOnlyMacros[name]:
+		return live(n)
+	case name == "detailssummary" || name == "contentbylabel":
+		idx, ok := c.env.(LabelIndex)
+		if !ok {
+			return live(n)
+		}
+		if name == "detailssummary" {
+			return c.propertiesReport(n, idx)
+		}
+		return c.contentByLabel(n, idx)
 	default:
 		c.env.Warn("macro-unsupported", fmt.Sprintf("the Confluence macro %q has no equivalent; mirrors that are not Confluence show it as a code block", name))
 		return []string{fence("confluence-macro", serialize(n))}

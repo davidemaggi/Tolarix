@@ -358,6 +358,8 @@
     "pagesInScope_one": "{{count}} pagina del Master inclusa.",
     "pagesInScope_other": "{{count}} pagine del Master incluse.",
     "masterWarnings": "Avvisi sul Master",
+    "warningCount_one": "(una volta)",
+    "warningCount_other": "({{count}} volte)",
     "warnings": "Avvisi",
     "showUnchanged": "Mostra le pagine invariate",
     "mirrorTitle": "Mirror: {{name}}",

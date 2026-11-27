@@ -19,11 +19,15 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 - Tables with merged cells or lists, code or images in their cells are kept as HTML tables (warning `table-html`) instead of being simplified; they are read back into Confluence tables.
 - Image captions are kept as an italic line under the image.
 - Obsidian embedded notes (`![[Note]]`) become *Include Page* macros in Confluence and stay embeds in Obsidian Mirrors; other Mirrors show a link (warning `page-embed`).
+- Confluence: *Page Properties Report* becomes a table and *Content by Label* a list of links to pages of the Master; Confluence Mirrors get the macros back.
+- Run warnings show the page title, and a warning repeated on one page is shown once with a count.
 
 ### Changed
 
 - Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
 - The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
+- Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
+- Tabs and line breaks in page titles become a space (Azure DevOps: `-`) instead of disappearing; affected Azure DevOps pages move once, and Obsidian file names no longer contain tabs.
 
 ## [1.0.0] - 2026-11-26
 

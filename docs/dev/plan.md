@@ -25,7 +25,8 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 ### Where we left off (2026-11-27)
 
-- **M10** (product owner, 2026-11-26, "fai tutti e 7" after a review of confluence-markdown-exporter) is committed on `develop`, not pushed. Start the next session by asking for the M10 review.
+- **M10** (product owner, 2026-11-26, "fai tutti e 7" after a review of confluence-markdown-exporter) was pushed and confirmed working by the product owner on a real Confluence Data Center (1444 pages → Azure DevOps).
+- **Post-M10 run-log fixes** (product owner, 2026-11-27, "procedi con tutto" after reviewing that run's log) are committed on `develop`, not pushed: see "Taken after M10". Ask the product owner to rerun that flow: the second run should be mostly `unchanged` (another `updated=1444` would be a determinism bug), and for the source of a page with `diagram-missing`.
 
 - M8 was committed and pushed to `develop` for testing in an environment. The product owner then asked (2026-11-26) for a fix to `scripts/build-core.mjs` on Windows (`go` not on PATH; committed) and for **M9, local folder exports, to ship before v1.0.0**. M9 is committed on `develop` (not pushed). Start the next session by asking for the M9 review.
 - **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
@@ -168,6 +169,12 @@ Taken during M10:
 - **PlantUML**: plain text, JSON `umlDefinition` and base64 (+ optional raw deflate, capped at 4 MiB) are read; unreadable bodies keep the macro XML with `macro-unsupported`.
 - Bool connection fields now show their hint under the switch in the UI.
 
+Taken after M10 (from a real Data Center run log, 2026-11-27):
+- **Live-macro markers** (documented in `model/model.go`): macros whose output depends on the live wiki are `<!-- tolarix:macro <base64 XML> -->` + rendered content + `<!-- tolarix:macro-end -->`. `detailssummary` renders as a table, `contentbylabel` as a list (pages of the Master only, through the optional `storage.LabelIndex`); live-only macros (`livesearch`, `recently-updated`, `change-history`, …) render as nothing, without a warning. The Confluence encoder restores the macro and skips the content.
+- **Labels are read whenever a page uses those macros**, even with the front matter options off: one extra request per page in that case. The front matter still follows the options.
+- **Warnings are collapsed** per page, code and message, with a `count`, and carry `pageTitle` (filled by the engine from the tree; API fields `pageTitle`, `count`).
+- **`filetree.CleanTitle`**: tabs and line breaks in titles become a space, other control characters are dropped; used by the ADO, Obsidian and folder encoders. ADO pages whose titles had a tab move once (`3.1.5Reporter…` → `3.1.5-Reporter…`).
+
 ### Technical choices
 - CI: GitHub Actions. Image: `ghcr.io/davidemaggi/tolarix`. CLI archives built by `scripts/package-cli.mjs` in `release.yml` (GoReleaser was planned, not needed).
 - Migrations: goose (embedded). Router: chi. OpenAPI hand-written as the contract; `oapi-codegen` (server) + `openapi-typescript`/`openapi-fetch` (web). CI fails on stale generated code.
@@ -213,7 +220,8 @@ Taken during M10:
   - Gliffy diagrams on another page (`pageid` parameter) are not resolved; only the page's own attachment is used.
   - Image captions are not written back to Confluence.
   - Images inside HTML tables may not show in Obsidian (it does not resolve vault paths in raw HTML).
-  - None of M10 has been tried on a real Confluence yet (fakes only), like M4/M5.
+  - M10 has run on a real Confluence Data Center (1444 pages, Azure DevOps Mirror, no failures); Confluence Cloud is still tested on fakes only.
+  - Page Properties Report / Content by Label only list pages of the Master (pages outside the flow are not known); CQL beyond `label =` / `label in` (space, type, ancestor filters) is ignored.
 - **M8 follow-ups**:
   - `release.yml` and the reusable `desktop.yml` have not run yet; check the first draft release carefully (archives, image tags, installers attached to the same draft).
   - Secret key rotation is not supported (documented in the admin guide).

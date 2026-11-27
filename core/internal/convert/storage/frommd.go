@@ -58,7 +58,18 @@ func (c *fromMD) children(n ast.Node) {
 	excerpt := false
 	for k := n.FirstChild(); k != nil; k = k.NextSibling() {
 		if h, ok := k.(*ast.HTMLBlock); ok {
-			switch strings.TrimSpace(c.lines(h)) {
+			line := strings.TrimSpace(c.lines(h))
+			if xml, ok := model.ParseMacroMarker(line); ok {
+				// A live macro: write it back and skip what it showed.
+				if _, err := parse(xml); err == nil {
+					c.b.WriteString(xml)
+					if end := c.macroEnd(k); end != nil {
+						k = end
+					}
+				}
+				continue
+			}
+			switch line {
 			case model.ExcerptStart:
 				if !excerpt {
 					c.b.WriteString(`<ac:structured-macro ac:name="excerpt"><ac:rich-text-body>`)
@@ -78,6 +89,22 @@ func (c *fromMD) children(n ast.Node) {
 	if excerpt {
 		c.b.WriteString(`</ac:rich-text-body></ac:structured-macro>`)
 	}
+}
+
+// macroEnd finds the MacroEnd line after the MacroStart line start.
+func (c *fromMD) macroEnd(start ast.Node) ast.Node {
+	for k := start.NextSibling(); k != nil; k = k.NextSibling() {
+		if h, ok := k.(*ast.HTMLBlock); ok {
+			line := strings.TrimSpace(c.lines(h))
+			if line == model.MacroEnd {
+				return k
+			}
+			if _, ok := model.ParseMacroMarker(line); ok {
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 func (c *fromMD) block(n ast.Node) {

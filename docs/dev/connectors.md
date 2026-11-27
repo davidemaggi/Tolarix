@@ -45,6 +45,9 @@ Links to pages outside the space or subtree become plain text with a warning.
     `updated_by`, `version`. v1: `content/{id}?expand=history,version,metadata.labels`;
     v2: `pages/{id}?include-labels=true&include-version=true`, users by account id.
   - A page whose details cannot be read gets `page-info-unreadable` and no front matter.
+  - The same details are also read, with both options off, when any page body holds a
+    `detailssummary` or `contentbylabel` macro: they need every page's labels. The front
+    matter still follows the options.
 
 **As a Mirror.** Location `parent` is the title or id of the page that mirrors go under.
 Empty means the connection's page, or the top of the space.
@@ -86,7 +89,16 @@ Empty means the connection's page, or the top of the space.
 | `ac:link` to a page / attachment, `ac:image` | `tolarix://page/…` / `tolarix://att/…` |
 | `drawio` macro | the diagram attachment (role `diagram-source`) plus its preview PNG, see [renderers.md](renderers.md) |
 | Mermaid fence (written) | `code` macro titled `mermaid` (Data Center has no built-in Mermaid) |
+| `detailssummary` (Page Properties Report) | the table Confluence shows: pages of the Master with the labels (parameter or CQL `label =`/`label in`), `firstcolumn`, `headings`, `sortBy`, `reverseSort`; wrapped in live-macro markers (below) |
+| `contentbylabel` | a list of page links (`operator`, `excludeCurrent`, `sort`, `reverse`, `max` default 5); wrapped in live-macro markers |
+| live-only macros (`livesearch`, `popular-labels`, `recently-updated`, `recently-updated-dashboard`, `change-history`, `pagetreesearch`, `create-from-template`, `listlabels`) | nothing, no warning; the markers alone |
 | any other macro | a ```` ```confluence-macro ```` block holding the raw XML, with a warning; written back verbatim to Confluence |
+
+Live-macro markers (`model.MacroMarker`): `<!-- tolarix:macro <base64 storage XML> -->`,
+the rendered content, `<!-- tolarix:macro-end -->`. Other targets drop the comments;
+the Confluence encoder writes the macro back and skips the content up to the end marker.
+Labels come from the optional `storage.LabelIndex` Env extension; without it the macro
+renders as markers only.
 
 ## Confluence Cloud (`confluence-cloud`)
 
