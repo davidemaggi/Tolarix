@@ -27,6 +27,7 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 - Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
 - The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
 - Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
+- Rendered draw.io diagrams showed as broken images on every Mirror except Confluence: the image inside the link to the `.drawio` file kept its internal address. Links nested in link text are now converted too.
 - Azure DevOps Mirrors link images and attachments relative to the page, so they show in Code wikis published from a folder of the repository (they were broken there). Every page with an attachment changes once.
 - Confluence: an attachment download answered with a web page (login or single sign-on) fails with `attachment-failed` instead of being mirrored as a broken file.
 - The run log says how many diagrams were found and rendered.

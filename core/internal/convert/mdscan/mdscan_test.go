@@ -101,3 +101,26 @@ func TestReplaceHTMLLinks(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestReplaceFuncRewritesImagesInsideLinks(t *testing.T) {
+	src := "[![alt](tolarix://att/png)](tolarix://att/src) and [plain](x)"
+	got := ReplaceFunc(src, MarkdownLink, func(m []string) (string, bool) {
+		if !strings.HasPrefix(m[3], "tolarix://att/") {
+			return "", false
+		}
+		return m[1] + "[" + m[2] + "](/" + strings.TrimPrefix(m[3], "tolarix://att/") + ")", true
+	})
+	if want := "[![alt](/png)](/src) and [plain](x)"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	// The outer link is left alone, the image inside it is still rewritten.
+	got = ReplaceFunc("[![alt](tolarix://att/png)](https://example.com)", MarkdownLink, func(m []string) (string, bool) {
+		if m[1] != "!" {
+			return "", false
+		}
+		return "![" + m[2] + "](/png)", true
+	})
+	if want := "[![alt](/png)](https://example.com)"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

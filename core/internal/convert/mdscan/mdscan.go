@@ -210,8 +210,22 @@ func ReplaceFuncAt(src string, re *regexp.Regexp, fn func(start int, m []string)
 				m[g] = src[idx[2*g]:idx[2*g+1]]
 			}
 		}
+		if re == MarkdownLink && strings.Contains(m[2], "](") {
+			// A link around an image ([![alt](img)](target)): the image is
+			// part of the text, so convert it first.
+			start := idx[0]
+			if inner := ReplaceFuncAt(m[2], re, func(_ int, im []string) (string, bool) { return fn(start, im) }); inner != m[2] {
+				m[2] = inner
+				m[0] = m[1] + "[" + inner + src[idx[5]:idx[1]]
+			}
+		}
 		rep, ok := fn(idx[0], m)
 		if !ok {
+			if m[0] != src[idx[0]:idx[1]] {
+				b.WriteString(src[last:idx[0]])
+				b.WriteString(m[0])
+				last = idx[1]
+			}
 			continue
 		}
 		b.WriteString(src[last:idx[0]])
