@@ -126,6 +126,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ needs.sign-cli.outputs.artifact-id }}
+          merge-multiple: true # by id it would still unpack into a folder named after the artifact
           path: signed
       # Put the signed tolarix.exe into the Windows archives and refresh their checksums
       - name: Repack and upload
