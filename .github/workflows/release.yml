@@ -54,10 +54,15 @@ jobs:
             on && /^## \[/ { exit }
             on { print }
           ' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-            --title "Tolarix $GITHUB_REF_NAME" --notes-file notes.md
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
+          # The id comes from the create response: listing the releases right
+          # after creating a draft may not show it yet.
+          id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" -F draft=true \
+            -f name="Tolarix $GITHUB_REF_NAME" -F body=@notes.md --jq .id)
+          if [ -z "$id" ]; then
+            echo "::error::could not create the draft release"
+            exit 1
+          fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   cli:
