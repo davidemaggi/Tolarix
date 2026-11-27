@@ -1,0 +1,154 @@
+name: Sign Windows files
+
+# Signs Windows files built by another job, on the self-hosted runner that holds
+# the code-signing certificate. That runner never checks out or builds code: it
+# downloads an artifact, signs the listed files, checks them and uploads them
+# as a new artifact. When the runner is offline nothing is signed and the
+# artifact-id output is empty: callers skip their signed steps.
+#
+# Repository settings (see "Signing" in docs/dev/README.md):
+#   secret   RUNNER_STATUS_TOKEN    fine-grained token, Administration: read on this
+#                                   repository (listing runners needs it)
+#   variable CODESIGN_CERT_SHA1     certificate thumbprint, or
+#   variable CODESIGN_CERT_SUBJECT  text of its subject
+#   variable CODESIGN_TIMESTAMP_URL RFC 3161 timestamp server of the certificate's CA
+#   variable SIGNTOOL_PATH          optional, full path to signtool.exe
+#   variable SIGNING_RUNNER_LABEL   optional, the runner's label (default: codesign)
+on:
+  workflow_call:
+    inputs:
+      artifact-id:
+        description: Artifact holding the files to sign
+        type: string
+        required: true
+      files:
+        description: Files to sign, one per line, relative to the artifact root; all must exist
+        type: string
+        required: true
+      name:
+        description: Name of the artifact with the signed files
+        type: string
+        required: true
+    outputs:
+      artifact-id:
+        description: Artifact with the signed files (empty when the runner was offline)
+        value: ${{ jobs.sign.outputs.artifact }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Signing runner online?
+    runs-on: ubuntu-latest
+    outputs:
+      online: ${{ steps.check.outputs.online }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_STATUS_TOKEN }}
+          LABEL: ${{ vars.SIGNING_RUNNER_LABEL || 'codesign' }}
+          NAME: ${{ inputs.name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::RUNNER_STATUS_TOKEN isn't set: $NAME stays unsigned"
+            echo "online=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count=$(gh api "repos/$REPO/actions/runners" --paginate \
+            --jq ".runners[] | select(.status == \"online\") | select(any(.labels[]; .name == \"$LABEL\")) | .name" | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "online=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No online runner labelled '$LABEL': $NAME stays unsigned"
+            echo "online=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sign:
+    name: Sign
+    needs: check
+    if: needs.check.outputs.online == 'true'
+    runs-on: [self-hosted, "${{ vars.SIGNING_RUNNER_LABEL || 'codesign' }}"]
+    timeout-minutes: 30
+    # Re-runs leave several artifacts with the same name: hand callers this one's id
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      # A self-hosted runner keeps its workspace between runs: start from an empty one
+      - name: Empty the workspace
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: Get-ChildItem -Force | Remove-Item -Recurse -Force
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact-id }}
+          path: files
+      - name: Sign and check
+        # Windows PowerShell: always there, unlike PowerShell 7. Its default policy (Restricted on
+        # Windows client) refuses the step's script file, so allow it for this process only.
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        env:
+          FILES: ${{ inputs.files }}
+          CODESIGN_CERT_SHA1: ${{ vars.CODESIGN_CERT_SHA1 }}
+          CODESIGN_CERT_SUBJECT: ${{ vars.CODESIGN_CERT_SUBJECT }}
+          CODESIGN_TIMESTAMP_URL: ${{ vars.CODESIGN_TIMESTAMP_URL }}
+          SIGNTOOL_PATH: ${{ vars.SIGNTOOL_PATH }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # signtool: the SIGNTOOL_PATH variable, else the PATH, else the usual SDK folders (newest first)
+          $signtool = $env:SIGNTOOL_PATH
+          if (-not $signtool) { $signtool = (Get-Command signtool.exe -ErrorAction SilentlyContinue).Source }
+          $searched = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
+            "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\signtool.exe",
+            "${env:ProgramFiles(x86)}\Windows Kits\10\App Certification Kit\signtool.exe",
+            "${env:ProgramFiles(x86)}\Microsoft SDKs\ClickOnce\SignTool\signtool.exe"
+          )
+          if (-not $signtool) {
+            $signtool = $searched | ForEach-Object { Get-ChildItem $_ -ErrorAction SilentlyContinue } |
+              Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $signtool -or -not (Test-Path $signtool)) {
+            throw "signtool.exe not found. Looked at SIGNTOOL_PATH ('$env:SIGNTOOL_PATH'), the PATH and: $($searched -join '; '). Set the SIGNTOOL_PATH repository variable to its full path, or install the Windows SDK signing tools."
+          }
+          Write-Host "Using $signtool"
+
+          # The certificate: by thumbprint when CODESIGN_CERT_SHA1 is set, else by subject text
+          if ($env:CODESIGN_CERT_SHA1) { $certificate = @('/sha1', ($env:CODESIGN_CERT_SHA1 -replace '\s', '')) }
+          elseif ($env:CODESIGN_CERT_SUBJECT) { $certificate = @('/n', $env:CODESIGN_CERT_SUBJECT, '/a') }
+          else { throw 'Set CODESIGN_CERT_SHA1 or CODESIGN_CERT_SUBJECT' }
+          if (-not $env:CODESIGN_TIMESTAMP_URL) { throw 'CODESIGN_TIMESTAMP_URL is not set' }
+          # When signing fails: who we run as, and which code-signing certificates that account can see
+          function Show-Certificates {
+            Write-Host "Running as $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+            foreach ($store in 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My') {
+              $found = @(Get-ChildItem $store -CodeSigningCert -ErrorAction SilentlyContinue)
+              Write-Host "$store : $($found.Count) code-signing certificate(s)"
+              $found | ForEach-Object { Write-Host "  $($_.Subject) | $($_.Thumbprint) | until $($_.NotAfter)" }
+            }
+          }
+
+          # Exactly the listed files: a missing one is an error, never a silent skip
+          $files = @($env:FILES -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ } |
+            ForEach-Object { Join-Path 'files' ($_ -replace '/', '\') })
+          if ($files.Count -eq 0) { throw 'No files to sign' }
+          $missing = @($files | Where-Object { -not (Test-Path $_ -PathType Leaf) })
+          if ($missing.Count) {
+            $present = Get-ChildItem files -Recurse -File | ForEach-Object { $_.FullName }
+            throw "Missing from the artifact: $($missing -join ', '). It holds: $($present -join ', ')"
+          }
+          & $signtool sign @certificate /fd sha256 /tr "$env:CODESIGN_TIMESTAMP_URL" /td sha256 $files
+          if ($LASTEXITCODE) { Show-Certificates; throw "signtool sign failed ($LASTEXITCODE)" }
+          & $signtool verify /pa /all $files
+          if ($LASTEXITCODE) { throw "signtool verify failed ($LASTEXITCODE)" }
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: ${{ inputs.name }}
+          path: files/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Empty the workspace again
+        if: always()
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: Get-ChildItem -Force | Remove-Item -Recurse -Force

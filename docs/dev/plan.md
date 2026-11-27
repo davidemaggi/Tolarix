@@ -27,7 +27,7 @@ Each milestone ends with tests green and a stop for review before the next one s
 
 - **M10** (product owner, 2026-11-26, "fai tutti e 7" after a review of confluence-markdown-exporter) was pushed and confirmed working by the product owner on a real Confluence Data Center (1444 pages → Azure DevOps).
 - **Post-M10 run-log fixes** (product owner, 2026-11-27, "procedi con tutto" after reviewing that run's log) and the draw.io fixes that followed are on `develop`: see "Taken after M10". Rendered diagrams now show in Azure DevOps (confirmed 2026-11-27). Still open: the source of the page with `diagram-missing` ("Batch ES").
-- **Next: v1.0.0.** The product owner is setting up a runner for code signing (2026-11-27); signing was a "not in v1" default until now, so decide whether v1.0.0 waits for it. `[Unreleased]` in the changelog sits above an untagged `[1.0.0]`: fold it in before tagging.
+- **Next: v1.0.0.** Windows signing is wired (see "Windows code signing"); try `desktop.yml` by hand first. `[Unreleased]` in the changelog sits above an untagged `[1.0.0]`: fold it in before tagging.
 
 - M8 was committed and pushed to `develop` for testing in an environment. The product owner then asked (2026-11-26) for a fix to `scripts/build-core.mjs` on Windows (`go` not on PATH; committed) and for **M9, local folder exports, to ship before v1.0.0**. M9 is committed on `develop` (not pushed). Start the next session by asking for the M9 review.
 - **v1.0.0 is prepared but not tagged.** Releasing needs the product owner's go-ahead: merge `develop` into `main`, tag `v1.0.0` on `main`, push the tag (see "Releasing" in [README.md](README.md)). `release.yml` has never run yet: the first tag is its first run, and the draft release lets us check everything before publishing.
@@ -68,7 +68,6 @@ Each milestone ends with tests green and a stop for review before the next one s
 - Missed schedules (server down): run once on startup, no backfill.
 - Concurrency: different flows in parallel, global cap 2; the mirrors of one flow run sequentially from one Master snapshot.
 - Desktop and Docker on the same machine do not share data.
-- Installers unsigned in v1.
 - Azure DevOps Services only in v1 (base URL configurable; Server untested).
 - Mirror banner: ADO/Obsidian blockquote/callout at top; Confluence info panel; stripped if ever re-read.
 - Unknown Confluence macros: kept as a fenced `confluence-macro` block with the raw XML + a warning; never silently dropped.
@@ -170,6 +169,11 @@ Taken during M10:
 - **PlantUML**: plain text, JSON `umlDefinition` and base64 (+ optional raw deflate, capped at 4 MiB) are read; unreadable bodies keep the macro XML with `macro-unsupported`.
 - Bool connection fields now show their hint under the switch in the UI.
 
+Windows code signing (product owner, 2026-11-27, "firma windows", modelled on their Hodor pipeline): replaces the "installers unsigned in v1" default for Windows; macOS stays unsigned.
+- A self-hosted runner labelled `codesign` holds the certificate and never checks out or builds code: `sign-windows.yml` (reusable) signs the files of an artifact with `signtool` and uploads them again; when the runner is offline (`RUNNER_STATUS_TOKEN` lists the runners) nothing is signed and the release goes on unsigned, with a warning.
+- Signed: `tolarix.exe` in the Windows CLI zips (repacked, `SHA256SUMS` rewritten), `tolarix-desktop.exe` + the sidecar, then the MSI and NSIS installers built from them with `tauri bundle --no-binary-patching` (checked by hash after unpacking). Signed files **replace** the unsigned ones in the draft under the same names (Hodor keeps both with `-signed`; Tolarix has no attestations to justify two sets).
+- Details and settings: "Signing" in [README.md](README.md).
+
 Taken after M10 (from a real Data Center run log, 2026-11-27):
 - **Live-macro markers** (documented in `model/model.go`): macros whose output depends on the live wiki are `<!-- tolarix:macro <base64 XML> -->` + rendered content + `<!-- tolarix:macro-end -->`. `detailssummary` renders as a table, `contentbylabel` as a list (pages of the Master only, through the optional `storage.LabelIndex`); live-only macros (`livesearch`, `recently-updated`, `change-history`, …) render as nothing, without a warning. The Confluence encoder restores the macro and skips the content.
 - **Labels are read whenever a page uses those macros**, even with the front matter options off: one extra request per page in that case. The front matter still follows the options.
@@ -217,7 +221,7 @@ Taken after M10 (from a real Data Center run log, 2026-11-27):
   - The cap of 2 lives in the built-in scheduler: `run-due` processes and CLI `flow run` are not counted (only the per-flow lock applies across processes).
   - Schedule sentences and validation messages for the advanced cron field are server-side English/Italian; cron parse errors are English only.
 - **M7 follow-ups**:
-  - Installers are unsigned: macOS Gatekeeper ("cannot be opened", right-click → Open, or `xattr -dr com.apple.quarantine`) and Windows SmartScreen warn. Signing and notarisation, and the Tauri updater, are for after v1.
+  - macOS installers are unsigned: Gatekeeper warns ("cannot be opened", right-click → Open, or `xattr -dr com.apple.quarantine`). Signing and notarisation, and the Tauri updater, are for after v1. Windows is signed (see "Windows code signing"); the signing pipeline has not run yet: try it by hand (Desktop installers) before the first tag.
   - Windows and Linux desktop builds have not been launched on a real machine yet.
   - On Linux without a Secret Service (no GNOME Keyring/KWallet), the key falls back to `secret.key` with a warning.
   - The desktop app has no menu or tray; closing the window quits the app and stops the built-in scheduler (by design for v1: run `tolarix serve` or `run-due` for always-on schedules).

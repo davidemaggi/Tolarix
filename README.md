@@ -86,8 +86,8 @@ Then open http://localhost:8080. Compose file, HTTPS, backups and upgrades: [adm
 [releases page](https://github.com/davidemaggi/Tolarix/releases).
 
 > [!NOTE]
-> The v1 installers are not signed. On macOS, open the app the first time with
-> right-click → **Open**. On Windows, choose **More info → Run anyway** in SmartScreen.
+> The Windows installers and `tolarix.exe` are code-signed. The macOS installers are
+> not: open the app the first time with right-click → **Open**.
 
 **Command line**: download the `tolarix` archive for your platform from the same
 page, check it against `SHA256SUMS`, and put the binary on your PATH.

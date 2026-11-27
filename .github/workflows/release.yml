@@ -5,6 +5,8 @@ name: Release
 #   2. CLI/server archives for Linux, macOS and Windows (amd64, arm64) + SHA256SUMS;
 #   3. the multi-arch Docker image ghcr.io/<owner>/tolarix:X.Y.Z (also X.Y, X, latest);
 #   4. the desktop installers (desktop.yml), uploaded to the same draft.
+# The Windows executables (CLI and desktop) are code-signed when the signing
+# runner is online (sign-windows.yml); otherwise they stay unsigned, with a warning.
 # The release stays a draft: review it and publish it by hand.
 on:
   push:
@@ -84,6 +86,68 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip dist/SHA256SUMS
+      # The Windows executables, for sign-cli: windows_<arch>/tolarix.exe
+      - name: Windows executables
+        env:
+          VERSION: ${{ needs.draft.outputs.version }}
+        run: |
+          for arch in amd64 arm64; do
+            mkdir -p "cli-windows/windows_$arch"
+            unzip -j "dist/tolarix_${VERSION}_windows_$arch.zip" "tolarix_${VERSION}_windows_$arch/tolarix.exe" -d "cli-windows/windows_$arch"
+          done
+      - uses: actions/upload-artifact@v4
+        id: windows
+        with:
+          name: cli-windows
+          path: cli-windows/
+          if-no-files-found: error
+          retention-days: 1
+    outputs:
+      windows: ${{ steps.windows.outputs.artifact-id }}
+
+  sign-cli:
+    name: Sign the CLI (Windows)
+    needs: cli
+    uses: ./.github/workflows/sign-windows.yml
+    secrets: inherit
+    with:
+      artifact-id: ${{ needs.cli.outputs.windows }}
+      name: cli-windows-signed
+      files: |
+        windows_amd64/tolarix.exe
+        windows_arm64/tolarix.exe
+
+  cli-signed:
+    name: Signed CLI to the draft release
+    needs: [draft, sign-cli]
+    if: needs.sign-cli.outputs.artifact-id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.sign-cli.outputs.artifact-id }}
+          path: signed
+      # Put the signed tolarix.exe into the Windows archives and refresh their checksums
+      - name: Repack and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.draft.outputs.version }}
+        run: |
+          mkdir out && cd out
+          gh release download "$GITHUB_REF_NAME" --pattern '*_windows_*.zip' --pattern SHA256SUMS
+          for arch in amd64 arm64; do
+            name="tolarix_${VERSION}_windows_$arch"
+            mkdir -p "stage/$name"
+            cp "../signed/windows_$arch/tolarix.exe" "stage/$name/tolarix.exe"
+            (cd stage && zip -q "../$name.zip" "$name/tolarix.exe")
+            grep -v -F "  $name.zip" SHA256SUMS > SHA256SUMS.new || true
+            sha256sum "$name.zip" >> SHA256SUMS.new
+            mv SHA256SUMS.new SHA256SUMS
+          done
+          sort -k2 SHA256SUMS -o SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$GITHUB_REF_NAME" ./*_windows_*.zip SHA256SUMS --clobber
 
   docker:
     name: Docker image
@@ -129,5 +193,6 @@ jobs:
     name: Desktop installers
     needs: draft
     uses: ./.github/workflows/desktop.yml
+    secrets: inherit
     with:
       release-id: ${{ needs.draft.outputs.id }}

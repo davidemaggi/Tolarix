@@ -305,6 +305,41 @@ screen captured mid-run would show the host name ("Running on <host>/<pid>").
 5. The first time, make the ghcr package public (GitHub → Packages → tolarix →
    Package settings → Change visibility).
 
+Windows executables are signed on the way (see Signing below). If the signing runner
+is offline the run still succeeds with unsigned Windows files and a warning: check the
+draft's warnings before publishing.
+
+### Signing
+
+The certificate lives on a self-hosted Windows runner labelled `codesign` (or the
+`SIGNING_RUNNER_LABEL` variable). That runner never checks out or builds code: the
+reusable `sign-windows.yml` downloads an artifact, signs the listed files with
+`signtool` (timestamped), checks them and uploads them again. It signs:
+
+- the CLI: `tolarix.exe` for amd64 and arm64 (`release.yml`: `sign-cli`, then
+  `cli-signed` repacks the zips and rewrites their lines in `SHA256SUMS`);
+- the desktop app (`desktop.yml`): `tolarix-desktop.exe` and the sidecar first, then
+  `tauri bundle --no-binary-patching` builds the MSI and NSIS installers from them
+  (without that flag the bundler writes the bundle type into the exe and breaks the
+  signature; only the updater, which we do not use, reads it), a check unpacks both
+  installers and finds the signed files by hash, the installers are signed and
+  replace the unsigned ones in the draft.
+
+Settings (repository → Settings → Secrets and variables → Actions):
+
+| Name | Kind | |
+|---|---|---|
+| `RUNNER_STATUS_TOKEN` | secret | Fine-grained token with Administration: read on this repository, to see whether the runner is online. Without it nothing is signed. |
+| `CODESIGN_CERT_SHA1` or `CODESIGN_CERT_SUBJECT` | variable | The certificate, by thumbprint or by subject text. |
+| `CODESIGN_TIMESTAMP_URL` | variable | The CA's RFC 3161 timestamp server. |
+| `SIGNTOOL_PATH` | variable | Optional: full path to `signtool.exe` (otherwise the PATH and the Windows SDK folders). |
+| `SIGNING_RUNNER_LABEL` | variable | Optional: the runner's label, `codesign` by default. |
+
+Try it without a release: run **Desktop installers** by hand (the signed installers are
+the `tolarix-desktop-windows-signed` artifact). The repository is public: keep
+"Require approval for all external contributors" on (Settings → Actions → General) so a
+pull request from a fork cannot send a job to the self-hosted runner.
+
 Try the packaging locally with `pnpm --filter web build && TOLARIX_VERSION=0.0.0-test node scripts/package-cli.mjs`
 (`dist/` is git-ignored) and the image with
 `docker buildx build -f deploy/Dockerfile --platform linux/amd64,linux/arm64 .`.

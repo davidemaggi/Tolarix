@@ -308,9 +308,12 @@ Add the vault folders Tolarix writes to to `ReadWritePaths`.
 Installers for Windows (`.msi`, `.exe`), macOS (`.dmg`, Apple silicon and Intel)
 and Linux (`.deb`, `.rpm`, `.AppImage`) are on the releases page.
 
-- They are **not signed** in v1. On macOS, open the app with right-click → **Open**
+- The Windows installers, the app and `tolarix.exe` (also in the command-line
+  archives) are **code-signed**, so Windows names the publisher. SmartScreen can
+  still warn for a while after a release, until the files are known to it: choose
+  **More info → Run anyway**.
+- The macOS installers are **not signed**: open the app with right-click → **Open**
   the first time (or run `xattr -dr com.apple.quarantine /Applications/Tolarix.app`).
-  On Windows, choose **More info → Run anyway** in SmartScreen.
 - The app starts a private server on `127.0.0.1` with a random port and token;
   it has no sign-in and nothing listens on the network.
 - It shares the data folder with the `tolarix` command on the same machine, and

@@ -24,6 +24,7 @@ notes, so every release needs a `## [X.Y.Z]` heading here.
 
 ### Changed
 
+- Windows: the installers, the desktop app and `tolarix.exe` in the command-line archives are code-signed.
 - Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
 - The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
 - Confluence: macros that only work live (*Live Search*, *Recently Updated*, *Popular Labels*, *Change History*, …) are hidden without a warning instead of becoming `confluence-macro` blocks.
