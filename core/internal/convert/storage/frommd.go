@@ -55,14 +55,45 @@ func (c *fromMD) convert(src []byte) string {
 }
 
 func (c *fromMD) children(n ast.Node) {
+	excerpt := false
 	for k := n.FirstChild(); k != nil; k = k.NextSibling() {
+		if h, ok := k.(*ast.HTMLBlock); ok {
+			switch strings.TrimSpace(c.lines(h)) {
+			case model.ExcerptStart:
+				if !excerpt {
+					c.b.WriteString(`<ac:structured-macro ac:name="excerpt"><ac:rich-text-body>`)
+					excerpt = true
+				}
+				continue
+			case model.ExcerptEnd:
+				if excerpt {
+					c.b.WriteString(`</ac:rich-text-body></ac:structured-macro>`)
+					excerpt = false
+				}
+				continue
+			}
+		}
 		c.block(k)
+	}
+	if excerpt {
+		c.b.WriteString(`</ac:rich-text-body></ac:structured-macro>`)
 	}
 }
 
 func (c *fromMD) block(n ast.Node) {
 	switch n := n.(type) {
 	case *ast.Paragraph:
+		if img, ok := n.FirstChild().(*ast.Image); ok && n.FirstChild() == n.LastChild() {
+			if _, _, isPage := model.ParsePageLink(plainText(img.Destination)); isPage {
+				// A page embed: the macro is a block.
+				if out := c.image(img); strings.HasPrefix(out, "<ac:") || out == "" {
+					c.b.WriteString(out)
+				} else {
+					c.b.WriteString("<p>" + out + "</p>")
+				}
+				return
+			}
+		}
 		if inner := c.inlines(n); strings.TrimSpace(inner) != "" {
 			c.b.WriteString("<p>" + inner + "</p>")
 		}
@@ -113,10 +144,10 @@ func (c *fromMD) code(lang, body string) {
 		}
 		c.w.Warn("macro-invalid", "a confluence-macro block does not hold valid storage XML; it is written as a code block")
 		lang = "xml"
-	case "mermaid":
-		// Confluence Data Center has no built-in Mermaid: keep the source in a
-		// code block titled "mermaid" so it comes back as a Mermaid fence.
-		c.b.WriteString(`<ac:structured-macro ac:name="code"><ac:parameter ac:name="title">mermaid</ac:parameter>` +
+	case "mermaid", "plantuml":
+		// Confluence has no built-in Mermaid or PlantUML: keep the source in a
+		// code block titled with the language so it comes back as that fence.
+		c.b.WriteString(`<ac:structured-macro ac:name="code"><ac:parameter ac:name="title">` + strings.ToLower(lang) + `</ac:parameter>` +
 			`<ac:plain-text-body>` + cdata(body) + `</ac:plain-text-body></ac:structured-macro>`)
 		return
 	}
@@ -255,6 +286,8 @@ func (c *fromMD) htmlBlock(n *ast.HTMLBlock) {
 	switch {
 	case trimmed == model.TOCMarker:
 		c.b.WriteString(`<ac:structured-macro ac:name="toc"/>`)
+	case isHTMLTable(trimmed):
+		c.htmlTable(trimmed)
 	case htmlCommentRe.MatchString(trimmed):
 	case trimmed == "":
 	default:
@@ -376,12 +409,17 @@ func (c *fromMD) inline(b *strings.Builder, n ast.Node) {
 	}
 }
 
-var brRe = regexp.MustCompile(`(?i)^<br\s*/?>$`)
+var (
+	brRe     = regexp.MustCompile(`(?i)^<br\s*/?>$`)
+	subSupRe = regexp.MustCompile(`(?i)^</?(sub|sup)>$`)
+)
 
 func (c *fromMD) rawHTML(b *strings.Builder, raw string) {
-	switch {
-	case brRe.MatchString(strings.TrimSpace(raw)):
+	switch t := strings.TrimSpace(raw); {
+	case brRe.MatchString(t):
 		b.WriteString("<br/>")
+	case subSupRe.MatchString(t):
+		b.WriteString(strings.ToLower(t))
 	case strings.HasPrefix(raw, "<!--"):
 	default:
 		c.w.Warn("html-dropped", fmt.Sprintf("the inline HTML %q is not supported by Confluence and was dropped (its text is kept)", truncate(raw, 60)))
@@ -505,7 +543,29 @@ func (c *fromMD) image(n *ast.Image) string {
 		}
 		return `<ac:image` + attrs + `>` + riAttachment(name, owner) + `</ac:image>`
 	}
+	if id, _, ok := model.ParsePageLink(dest); ok {
+		return c.include(id, alt, strings.TrimSpace(plainText(n.Title)) == model.ExcerptTitle)
+	}
 	return `<ac:image` + attrs + `><ri:url ri:value="` + escapeAttr(dest) + `"/></ac:image>`
+}
+
+// include writes a page embed as an include (or excerpt-include) macro.
+func (c *fromMD) include(id, alt string, excerpt bool) string {
+	if id == c.w.SelfID() {
+		c.w.Warn("page-embed", "a page embeds itself; the embed is left out")
+		return ""
+	}
+	title, found := c.w.PageTitle(id)
+	if !found {
+		c.w.Warn("link-unresolved", fmt.Sprintf("the page %q embedded here is not in this mirror; only its title is shown", firstNonEmpty(alt, id)))
+		return escapeText(alt)
+	}
+	name := "include"
+	if excerpt {
+		name = "excerpt-include"
+	}
+	return `<ac:structured-macro ac:name="` + name + `"><ac:parameter ac:name=""><ac:link><ri:page ri:content-title="` +
+		escapeAttr(title) + `"/></ac:link></ac:parameter></ac:structured-macro>`
 }
 
 // anchorName is the anchor Confluence gives a heading: its text without spaces.

@@ -166,6 +166,10 @@
       "tokenHint": "A personal access token (Profile → Personal Access Tokens). With a username, this is that user's password instead.",
       "username": "Username",
       "usernameHint": "Only for password sign-in. Leave it empty when you use a personal access token.",
+      "properties": "Labels and Page Properties in the front matter",
+      "propertiesHint": "When this space is the Master: each page's labels become tags, and its Page Properties table becomes front matter entries.",
+      "pageDetails": "Page details in the front matter",
+      "pageDetailsHint": "When this space is the Master: each page's id, address, author, creation and update dates, last editor and version go into its front matter.",
       "location": {
         "parent": "Parent page",
         "parentHint": "Title (or numeric id) of the page that mirrored pages go under. Leave it empty to use the connection's page, or the top of the space."
@@ -188,6 +192,10 @@
       "emailHint": "The email of the Atlassian account the API token belongs to.",
       "token": "API token",
       "tokenHint": "Create a classic API token at id.atlassian.com → Security → API tokens. Scoped tokens are not supported yet.",
+      "properties": "Labels and Page Properties in the front matter",
+      "propertiesHint": "When this space is the Master: each page's labels become tags, and its Page Properties table becomes front matter entries.",
+      "pageDetails": "Page details in the front matter",
+      "pageDetailsHint": "When this space is the Master: each page's id, address, author, creation and update dates, last editor and version go into its front matter.",
       "location": {
         "parent": "Parent page",
         "parentHint": "Title (or numeric id) of the page that mirrored pages go under. Leave it empty to use the connection's page, or the space homepage."

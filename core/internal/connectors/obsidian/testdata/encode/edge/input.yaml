@@ -21,6 +21,13 @@ pages:
     order: 1
     body: |
       Self link: [Notes](tolarix://page/2) and [renamed](tolarix://page/2b).
+
+      ![notes](tolarix://page/2b)
+
+      <table>
+      <tr><td colspan="2"><a href="tolarix://page/3/a">Child</a> and <a href="tolarix://page/gone">gone</a></td></tr>
+      <tr><td><img src="tolarix://att/aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111" alt="img.png" width="120"></td><td><a href="tolarix://page/2#Part%20one">here</a></td></tr>
+      </table>
   - id: "2b"
     title: "notes"
     order: 2

@@ -248,13 +248,21 @@ function ConnectionForm({ kinds, existing }: { kinds: ConnectorKind[]; existing?
 
           {plainFields.map((f) =>
             f.type === "bool" ? (
-              <div key={f.name} className="flex items-center gap-3">
+              <div key={f.name} className="flex items-start gap-3">
                 <Switch
                   id={`cfg-${f.name}`}
                   checked={values[f.name] === true}
                   onCheckedChange={(v) => setValues((s) => ({ ...s, [f.name]: v }))}
+                  aria-describedby={text.hint(kind.kind, f.name) ? `cfg-${f.name}-hint` : undefined}
                 />
-                <Label htmlFor={`cfg-${f.name}`}>{text.label(kind.kind, f.name)}</Label>
+                <div className="grid gap-1">
+                  <Label htmlFor={`cfg-${f.name}`}>{text.label(kind.kind, f.name)}</Label>
+                  {text.hint(kind.kind, f.name) && (
+                    <p id={`cfg-${f.name}-hint`} className="text-sm text-muted-foreground">
+                      {text.hint(kind.kind, f.name)}
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <Field

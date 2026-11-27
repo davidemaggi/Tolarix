@@ -2,6 +2,7 @@
 1 [link-out-of-scope] the link "Elsewhere" points to a page that is not part of this mirror; it is shown as plain text
 1 [link-to-folder] the link "Group" points to a page that is a folder without a note in this mirror; it is shown as plain text
 1 [renamed] the page "Q&A: what? / why*" is saved as "Q&A- what- - why-" because the original name is not allowed or already taken
+2 [link-out-of-scope] a link inside a table points to a page that is not part of this mirror; it is shown as plain text
 2b [renamed] the page "notes" is saved as "notes (2)" because the original name is not allowed or already taken
 3/b [renamed] the page "Trailing dots..." is saved as "Trailing dots" because the original name is not allowed or already taken
 4 [renamed] the page "Archived" is saved as "Archived (2)" because the original name is not allowed or already taken

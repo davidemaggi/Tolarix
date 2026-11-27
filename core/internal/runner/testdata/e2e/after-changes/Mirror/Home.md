@@ -16,7 +16,7 @@ Broken: Does Not Exist.
 ![[Mirror/attachments/logo.png]]
 ![[Mirror/attachments/diagram.png]]
 See the [[Mirror/attachments/spec.pdf]] and [[Mirror/attachments/spec.pdf|the spec]].
-[[Mirror/Projects/Beta]]
+![[Mirror/Projects/Beta]]
 
 > [!note] Remember
 > Callouts stay as they are.

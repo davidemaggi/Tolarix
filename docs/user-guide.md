@@ -67,12 +67,25 @@ account that only has access to the spaces or wikis it syncs.
 | Space or page address | Copy it from the browser. A space (`…/display/KEY`, `…/spaces/viewspace.action?key=KEY`) syncs the whole space; a page (`…/display/KEY/Title`, `…/pages/viewpage.action?pageId=123`) syncs that page and everything below it. |
 | Personal access token or password | A personal access token (avatar → **Profile → Personal Access Tokens → Create token**). |
 | Username | Only for older versions without tokens. The token field then holds that user's password. |
+| Labels and Page Properties / Page details in the front matter | Optional, see below. |
 
 - **Permissions:** *View* on the space for a Master. For a Mirror, *Add* pages
   and attachments, plus *Delete* pages and attachments when the flow uses the
   delete policy. Archived pages are moved under an archive page, not deleted.
 - **Mirror location:** *Parent page*, given as a title or numeric id. Empty means
   the connection's page, or the top of the space.
+- Short links (`…/x/AbCd`, from **Share → Copy link**) work as the address too.
+
+The two front matter options (both kinds of Confluence connection) matter only
+when the space is a Master, and are off by default:
+
+- **Labels and Page Properties in the front matter:** each page's labels become
+  `tags`, and the rows of its *Page Properties* tables become front matter
+  entries (users show as names, lists as lists).
+- **Page details in the front matter:** `confluence_id`, `confluence_url`,
+  `author`, `created`, `updated`, `updated_by` and `version`.
+
+They cost one extra request per page on each run.
 
 ### Confluence Cloud
 
@@ -81,6 +94,7 @@ account that only has access to the spaces or wikis it syncs.
 | Space or page address | For example `https://your-site.atlassian.net/wiki/spaces/KEY/overview`, or the address of a page to sync it and everything below it. |
 | Email | The email of the Atlassian account the token belongs to. |
 | API token | A **classic** API token: [id.atlassian.com](https://id.atlassian.com) → **Security → Create and manage API tokens → Create API token**. Scoped tokens are not supported yet. |
+| Labels and Page Properties / Page details in the front matter | Optional, as on Data Center. |
 
 - **Permissions:** the same space permissions as on Data Center: *View* for a
   Master; *Add* pages and attachments for a Mirror, plus *Delete* for the delete
@@ -293,6 +307,8 @@ common ones:
 | `attachment-missing`, `attachment-not-mirrored` | a referenced file was not found, or attachments are off |
 | `render-failed`, `diagram-missing` | a draw.io diagram could not be turned into a PNG (see the admin guide) |
 | `confluence-macro`, `macro-unsupported` | a Confluence macro has no equivalent on the Mirror |
+| `table-html` | a table with merged cells or lists, code or images in its cells was kept as an HTML table |
+| `page-embed` | the Master shows another page's content inside this one (Confluence *Include Page*, Obsidian `![[Note]]`); this Mirror shows a link instead |
 | `scope-missing` | a selected or left-out page no longer exists in the Master |
 
 The attachment line at the end of each Mirror says how many files were uploaded
@@ -318,9 +334,9 @@ never drops content silently. Developer details:
 
 | From → To | What changes |
 |---|---|
-| Obsidian → Confluence | Callouts become info/tip/note/warning panels; foldable callouts become *expand*. Mermaid becomes a `code` block titled `mermaid` (Data Center has no built-in Mermaid). Embedded notes (`![[Note]]`) become links. Front matter is not mapped (Confluence labels are not supported yet). Master order is lost: Confluence orders child pages itself. |
+| Obsidian → Confluence | Callouts become info/tip/note/warning panels; foldable callouts become *expand*. Mermaid and PlantUML become a `code` block titled `mermaid` or `plantuml` (Data Center has no built-in Mermaid). Embedded notes (`![[Note]]`) become *Include Page* macros. HTML tables (`<table>`) become Confluence tables, merged cells included. Front matter is not mapped (Confluence labels are not supported yet). Master order is lost: Confluence orders child pages itself. |
 | Obsidian → Azure DevOps | Callouts become a bold label in a quote (`> **Tip:** …`), because the wiki has no callouts. Mermaid becomes `::: mermaid`. Front matter is kept. Page order follows the Master (`.order`). |
-| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` become callouts (Azure DevOps: bold label). `expand` becomes a foldable callout. `toc` is kept as a table of contents. `children`, `pagetree` and `anchor` are dropped. `status` becomes its text in brackets (`[DONE]`), Jira issues become the issue key. Any other macro becomes a `confluence-macro` code block holding its XML, with a warning. Confluence Cloud whiteboards, databases and embeds are skipped; folders become title-only pages. |
+| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` become callouts (Azure DevOps: bold label). `expand` becomes a foldable callout. `toc` is kept as a table of contents. `children`, `pagetree` and `anchor` are dropped. `status` becomes its text in brackets (`[DONE]`), Jira issues become the issue key. Mentions and *profile* macros show the person's name. PlantUML becomes a `plantuml` code block; Gliffy diagrams show their PNG preview; *View file* / *PDF* macros become a link to the attachment. *Include Page* and *Excerpt Include* become an embedded note in Obsidian and a link elsewhere (`page-embed`). Tables with merged cells or lists, code or images in their cells are kept as HTML tables (`table-html`); images inside them may not show in Obsidian. Image captions become an italic line under the image. Short links (`/x/…`) to pages of the Master become page links. Any other macro becomes a `confluence-macro` code block holding its XML, with a warning. Confluence Cloud whiteboards, databases and embeds are skipped; folders become title-only pages. |
 | Confluence → Confluence | Macros, including unknown ones, are written back as they were. Titles are made unique per space. |
 | Azure DevOps → others | `[[_TOC_]]` becomes the target's table of contents. `[[_TOSP_]]` (subpages list) is dropped with a warning. Image sizes (`=300x200`) are kept where the target supports them. |
 | any → Obsidian | Links are written as wikilinks with the full vault path. Attachments go to the vault's attachment folder (or `attachments/`); files with the same name but different content get a short hash in the name. Obsidian has no manual page order: pages appear alphabetically. |

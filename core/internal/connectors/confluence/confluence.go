@@ -48,6 +48,8 @@ func init() {
 			{Name: "url", Type: "url", Required: true},
 			{Name: "token", Type: "secret", Required: true, Secret: true},
 			{Name: "username", Type: "string"},
+			{Name: "properties", Type: "bool"},
+			{Name: "pageDetails", Type: "bool"},
 		},
 		LocationFields: location,
 		New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
@@ -67,6 +69,8 @@ func init() {
 			{Name: "url", Type: "url", Required: true},
 			{Name: "email", Type: "string", Required: true},
 			{Name: "token", Type: "secret", Required: true, Secret: true},
+			{Name: "properties", Type: "bool"},
+			{Name: "pageDetails", Type: "bool"},
 		},
 		LocationFields: location,
 		New: func(raw json.RawMessage, secret secrets.String) (connectors.Connector, error) {
@@ -89,6 +93,12 @@ type Config struct {
 	// Email is the Atlassian account of a Cloud connection; the token is
 	// an API token of that account.
 	Email string `json:"email,omitempty"`
+	// Properties copies the labels (as tags) and the Page Properties of
+	// each page into its front matter, when reading.
+	Properties bool `json:"properties,omitempty"`
+	// PageDetails adds the page's id, address, author, dates and version to
+	// its front matter, when reading.
+	PageDetails bool `json:"pageDetails,omitempty"`
 }
 
 // Location is a flow target inside the space.
@@ -113,6 +123,7 @@ type Confluence struct {
 	client *httpc.Client
 	api    api
 	cloud  bool
+	opts   Config // the front matter options
 
 	mu       sync.Mutex
 	resolved bool
@@ -140,7 +151,7 @@ func New(c Config, token secrets.String) (*Confluence, error) {
 		}
 		r.Header.Set("Authorization", "Bearer "+token.Reveal())
 	}
-	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth)}
+	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth), opts: c}
 	c2.api = &v1{c: c2}
 	return c2, nil
 }
@@ -163,7 +174,7 @@ func NewCloud(c Config, token secrets.String) (*Confluence, error) {
 		return nil, errors.New("the API token is missing: create one at id.atlassian.com (Security → API tokens) and paste it here")
 	}
 	auth := func(r *http.Request) { r.SetBasicAuth(email, token.Reveal()) }
-	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth), cloud: true}
+	c2 := &Confluence{addr: addr, client: httpc.New(addr.BaseURL, auth), cloud: true, opts: c}
 	c2.api = &v2{c: c2}
 	return c2, nil
 }
@@ -176,7 +187,7 @@ var (
 	reSpaces   = regexp.MustCompile(`^(.*?)/spaces/([^/]+)(?:/pages/(\d+)(?:/[^/]*)?|/overview)?/?$`)
 	reViewPage = regexp.MustCompile(`^(.*?)/pages/viewpage\.action$`)
 	reViewSp   = regexp.MustCompile(`^(.*?)/spaces/viewspace\.action$`)
-	reTiny     = regexp.MustCompile(`^(.*?)/x/[^/]+$`)
+	reTiny     = regexp.MustCompile(`^(.*?)/x/([^/]+)$`)
 )
 
 // ParseURL reads the address of a space or a page as copied from the browser.
@@ -200,7 +211,12 @@ func ParseURL(raw string) (Address, error) {
 	q := u.Query()
 	switch {
 	case reTiny.MatchString(p):
-		return Address{}, errors.New("short links (/x/…) are not supported: open the page and copy its full address, or use Page information to find its pageId address")
+		m := reTiny.FindStringSubmatch(p)
+		if id, ok := tinyPageID(m[2]); ok {
+			return Address{BaseURL: base(m[1]), PageID: id}, nil
+		}
+		return Address{}, errors.New("this short link (/x/…) cannot be read: open the page and copy its full address from the browser")
+
 	case reViewPage.MatchString(p):
 		m := reViewPage.FindStringSubmatch(p)
 		if id := q.Get("pageId"); id != "" {

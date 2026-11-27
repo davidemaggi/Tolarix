@@ -198,12 +198,48 @@ func (f *Format) Encode(p *model.Page, l *connectors.Layout, w connectors.Warner
 	body := mdscan.ReplaceFunc(p.Body, mdscan.MarkdownLink, func(m []string) (string, bool) {
 		return encodeLink(p, l, w, m[1] == "!", m[2], m[3], m[4])
 	})
+	body = mdscan.ReplaceHTMLLinks(body, func(_, u string) (string, bool) {
+		return htmlLinkDest(p, l, w, u)
+	})
 	return append(fm, encodeBlocks(body)...), nil
+}
+
+// htmlLinkDest is the destination of a link or image inside an HTML table.
+func htmlLinkDest(p *model.Page, l *connectors.Layout, w connectors.Warner, u string) (string, bool) {
+	if id, heading, ok := model.ParsePageLink(u); ok {
+		pl, found := l.Pages[id]
+		if !found || strings.HasSuffix(pl.Key, "/") {
+			w.Warn(connectors.Warning{PageID: p.ID, Code: "link-out-of-scope",
+				Message: "a link inside a table points to a page that is not part of this mirror; it is shown as plain text"})
+			return "", false
+		}
+		dest := "/" + linkPath(trimMD(pl.Key))
+		if heading != "" {
+			if id == p.ID {
+				dest = ""
+			}
+			dest += "#" + slug(heading)
+		}
+		return dest, true
+	}
+	if hash, ok := model.ParseAttachmentLink(u); ok {
+		if key, found := l.Attachments[hash]; found {
+			return "/" + linkPath(key), true
+		}
+		w.Warn(connectors.Warning{PageID: p.ID, Code: "attachment-not-mirrored",
+			Message: "an attachment used inside a table is not copied to this mirror; only its description is shown"})
+	}
+	return "", false
 }
 
 func encodeLink(p *model.Page, l *connectors.Layout, w connectors.Warner, image bool, text, rawURL, title string) (string, bool) {
 	u := strings.TrimSuffix(strings.TrimPrefix(rawURL, "<"), ">")
 	if id, heading, ok := model.ParsePageLink(u); ok {
+		if image { // a page embed: the wiki can only link to the page
+			w.Warn(connectors.Warning{PageID: p.ID, Code: "page-embed",
+				Message: fmt.Sprintf("the content of the page %q is embedded in the Master; this mirror shows a link to it instead", text)})
+			title = ""
+		}
 		pl, found := l.Pages[id]
 		if !found || strings.HasSuffix(pl.Key, "/") {
 			code, why := "link-out-of-scope", "is not part of this mirror"

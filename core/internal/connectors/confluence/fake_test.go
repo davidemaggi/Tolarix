@@ -44,6 +44,31 @@ type fakePage struct {
 	Version                 int
 	Order                   int
 	Folder                  bool // Cloud folder
+	Labels                  []string
+}
+
+// Users of the fakes: Data Center by user key or username, Cloud by account
+// id. History names the first as the author and the second as the editor.
+var fakeUsers = map[string]string{"ukey-ada": "Ada Lovelace", "ada": "Ada Lovelace", "557058:ada": "Ada Lovelace",
+	"ukey-alan": "Alan Turing", "alan": "Alan Turing", "557058:alan": "Alan Turing"}
+
+func fakeLabels(p *fakePage) []map[string]any {
+	out := []map[string]any{}
+	for _, l := range p.Labels {
+		out = append(out, map[string]any{"name": l, "prefix": "global"})
+	}
+	return append(out, map[string]any{"name": "private", "prefix": "my"})
+}
+
+func (f *fakeConfluence) serveUser(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	for _, k := range []string{q.Get("accountId"), q.Get("key"), q.Get("username")} {
+		if n, ok := fakeUsers[k]; ok && k != "" {
+			writeJSON(w, map[string]any{"displayName": n})
+			return
+		}
+	}
+	fail(w, http.StatusNotFound, "user not found")
 }
 
 type fakeAtt struct {
@@ -119,6 +144,17 @@ func (f *fakeConfluence) pageJSON(p *fakePage, expand string) map[string]any {
 	}
 	if strings.Contains(expand, "body.storage") {
 		m["body"] = map[string]any{"storage": map[string]any{"value": p.Body, "representation": "storage"}}
+	}
+	if strings.Contains(expand, "history") {
+		// Data Center names the author; the editor is looked up by key.
+		m["history"] = map[string]any{"createdDate": "2024-01-02T10:00:00.000+01:00",
+			"createdBy": map[string]any{"userKey": "ukey-ada", "username": "ada", "displayName": "Ada Lovelace"}}
+		m["version"] = map[string]any{"number": p.Version, "when": "2024-03-04T12:00:00.000+01:00",
+			"by": map[string]any{"userKey": "ukey-alan"}}
+		m["_links"] = map[string]any{"webui": "/pages/viewpage.action?pageId=" + p.ID}
+	}
+	if strings.Contains(expand, "metadata.labels") {
+		m["metadata"] = map[string]any{"labels": map[string]any{"results": fakeLabels(p)}}
 	}
 	if strings.Contains(expand, "children.page") {
 		m["children"] = map[string]any{"page": map[string]any{"size": len(f.children(p.ID))}}
@@ -212,7 +248,7 @@ func (f *fakeConfluence) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		// Cloud keeps only attachment upload and download on v1.
 		upload := r.Method == http.MethodPost && strings.Contains(path, "/child/attachment")
-		if !upload && !strings.HasPrefix(path, "/download/attachments/") {
+		if !upload && !strings.HasPrefix(path, "/download/attachments/") && path != "/rest/api/user" {
 			f.t.Errorf("fake confluence cloud: v1 call %s %s", r.Method, r.URL)
 			http.NotFound(w, r)
 			return
@@ -220,6 +256,9 @@ func (f *fakeConfluence) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case path == "/rest/api/user":
+		f.serveUser(w, r)
+
 	case strings.HasPrefix(path, "/download/attachments/"):
 		name, _ := url.PathUnescape(seg[len(seg)-1])
 		for _, a := range f.atts {

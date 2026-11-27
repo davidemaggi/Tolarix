@@ -34,7 +34,7 @@ func TestCloudRegistrationAndNew(t *testing.T) {
 	for _, f := range spec.Fields {
 		names = append(names, f.Name)
 	}
-	if strings.Join(names, ",") != "url,email,token" {
+	if strings.Join(names, ",") != "url,email,token,properties,pageDetails" {
 		t.Fatalf("fields = %v", names)
 	}
 

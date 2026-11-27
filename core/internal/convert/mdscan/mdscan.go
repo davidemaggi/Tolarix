@@ -8,6 +8,7 @@
 package mdscan
 
 import (
+	"html"
 	"regexp"
 	"strings"
 )
@@ -231,7 +232,25 @@ var (
 	MarkdownLink = regexp.MustCompile(`(!?)\[((?:[^\[\]\n]|\[[^\[\]\n]*\])*)\]\(\s*(<[^>\n]*>|[^()\s]+)(?:\s+"([^"\n]*)")?\s*\)`)
 	// WikiLink matches [[target]] and ![[target]]. Groups: 1 "!" or "", 2 inner text.
 	WikiLink = regexp.MustCompile(`(!?)\[\[([^\[\]\n]+?)\]\]`)
+	// HTMLLink matches an href or src attribute holding a canonical link, as
+	// in the HTML tables of canonical Markdown, with the space before it.
+	// Groups: 1 attribute, 2 URL.
+	HTMLLink = regexp.MustCompile(`\s(href|src)="(tolarix://[^"]*)"`)
 )
+
+// ReplaceHTMLLinks rewrites the canonical links in href and src attributes.
+// fn gets the attribute name and the unescaped URL and returns the new
+// destination; ok=false drops the attribute (the link shows as text, the
+// image as its description).
+func ReplaceHTMLLinks(src string, fn func(attr, u string) (dest string, ok bool)) string {
+	return ReplaceFunc(src, HTMLLink, func(m []string) (string, bool) {
+		dest, ok := fn(m[1], html.UnescapeString(m[2]))
+		if !ok {
+			return "", true
+		}
+		return " " + m[1] + `="` + html.EscapeString(dest) + `"`, true
+	})
+}
 
 // SplitFrontMatter separates a leading YAML front matter block ("---" lines).
 // It returns the YAML (without delimiters) and the remaining body.

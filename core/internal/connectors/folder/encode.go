@@ -16,10 +16,15 @@ import (
 // encodeBody rewrites the canonical links of a page body. pageDest and
 // attDest turn a target key into a link destination.
 func encodeBody(p *model.Page, l *connectors.Layout, w connectors.Warner, pageDest, attDest func(key string) string) string {
-	return mdscan.ReplaceFunc(p.Body, mdscan.MarkdownLink, func(m []string) (string, bool) {
+	body := mdscan.ReplaceFunc(p.Body, mdscan.MarkdownLink, func(m []string) (string, bool) {
 		image, text, title := m[1] == "!", m[2], m[4]
 		u := strings.TrimSuffix(strings.TrimPrefix(m[3], "<"), ">")
 		if id, heading, ok := model.ParsePageLink(u); ok {
+			if image { // a page embed: Markdown can only link to the page
+				w.Warn(connectors.Warning{PageID: p.ID, Code: "page-embed",
+					Message: fmt.Sprintf("the content of the page %q is embedded in the Master; this mirror shows a link to it instead", text)})
+				title = ""
+			}
 			pl, found := l.Pages[id]
 			if !found || strings.HasSuffix(pl.Key, "/") {
 				code, why := "link-out-of-scope", "is not part of this mirror"
@@ -54,6 +59,33 @@ func encodeBody(p *model.Page, l *connectors.Layout, w connectors.Warner, pageDe
 				return "![" + text + "](" + dest + titleSuffix(title) + ")", true
 			}
 			return "[" + text + "](" + dest + titleSuffix(title) + ")", true
+		}
+		return "", false
+	})
+	// Links and images inside HTML tables.
+	return mdscan.ReplaceHTMLLinks(body, func(_, u string) (string, bool) {
+		if id, heading, ok := model.ParsePageLink(u); ok {
+			pl, found := l.Pages[id]
+			if !found || strings.HasSuffix(pl.Key, "/") {
+				w.Warn(connectors.Warning{PageID: p.ID, Code: "link-out-of-scope",
+					Message: "a link inside a table points to a page that is not part of this mirror; it is shown as plain text"})
+				return "", false
+			}
+			dest := pageDest(pl.Key)
+			if heading != "" {
+				if id == p.ID {
+					dest = ""
+				}
+				dest += "#" + slug(heading)
+			}
+			return dest, true
+		}
+		if hash, ok := model.ParseAttachmentLink(u); ok {
+			if key, found := l.Attachments[hash]; found {
+				return attDest(key), true
+			}
+			w.Warn(connectors.Warning{PageID: p.ID, Code: "attachment-not-mirrored",
+				Message: "an attachment used inside a table is not copied to this mirror; only its description is shown"})
 		}
 		return "", false
 	})

@@ -213,8 +213,8 @@ func (d *decoder) wikiLink(p *model.Page, dir string, embed bool, inner string) 
 		return "[" + escapeLinkText(text) + "](" + model.PageLink(p.ID, heading) + ")"
 	}
 	if id, ok := d.ix.note(file, dir); ok && !looksLikeFile(file) {
-		if embed {
-			d.warn(p, "note-embed", "the embedded note %q is shown as a link in mirrors", file)
+		if embed { // a page embed (see model.Page)
+			return "![" + escapeLinkText(text) + "](" + model.PageLink(id, heading) + ")"
 		}
 		return "[" + escapeLinkText(text) + "](" + model.PageLink(id, heading) + ")"
 	}

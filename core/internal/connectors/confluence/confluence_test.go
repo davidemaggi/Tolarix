@@ -2,12 +2,15 @@ package confluence
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -35,7 +38,9 @@ func TestParseURL(t *testing.T) {
 		{"https://wiki.example.com/spaces/DOC/pages/987/My+Page", Address{BaseURL: "https://wiki.example.com", SpaceKey: "DOC", PageID: "987"}, ""},
 		{"https://wiki.example.com/spaces/DOC/overview", Address{BaseURL: "https://wiki.example.com", SpaceKey: "DOC"}, ""},
 		{"https://wiki.example.com/spaces/DOC", Address{BaseURL: "https://wiki.example.com", SpaceKey: "DOC"}, ""},
-		{"https://wiki.example.com/x/AbCd", Address{}, "short links"},
+		{"https://wiki.example.com/x/SwAB", Address{BaseURL: "https://wiki.example.com", PageID: "65611"}, ""},
+		{"https://site.atlassian.net/wiki/x/SwAB", Address{BaseURL: "https://site.atlassian.net/wiki", PageID: "65611"}, ""},
+		{"https://wiki.example.com/x/AAAA", Address{}, "short link"},
 		{"wiki.example.com/display/DOC", Address{}, "not a web address"},
 		{"https://wiki.example.com/dashboard.action", Address{}, "does not look like"},
 		{"", Address{}, "missing"},
@@ -425,4 +430,21 @@ func (f *fakeConfluence) byTitleLocked(title string) *fakePage {
 		}
 	}
 	return nil
+}
+
+func TestTinyPageID(t *testing.T) {
+	for _, id := range []uint64{1, 65611, 123456789, 4294967296, 98765432101234} {
+		var b [8]byte
+		binary.LittleEndian.PutUint64(b[:], id)
+		// Confluence swaps the usual URL-safe characters: "/" is "-", "+" is "_".
+		code := strings.NewReplacer("/", "-", "+", "_").Replace(strings.TrimRight(base64.StdEncoding.EncodeToString(b[:]), "=A"))
+		if got, ok := tinyPageID(code); !ok || got != strconv.FormatUint(id, 10) {
+			t.Errorf("tinyPageID(%q) = %q, %v; want %d", code, got, ok, id)
+		}
+	}
+	for _, bad := range []string{"", "AAAA", "AAAAAAAAAAAAA", "/AB", "a+b"} {
+		if got, ok := tinyPageID(bad); ok {
+			t.Errorf("tinyPageID(%q) = %q", bad, got)
+		}
+	}
 }

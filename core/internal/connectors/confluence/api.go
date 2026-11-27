@@ -33,6 +33,8 @@ type api interface {
 	// connection names no page: "" (the top of the space) on Data Center, the
 	// space homepage on Cloud.
 	defaultParent(ctx context.Context) (id, title string, err error)
+	// info reads the history, labels and web address of a page.
+	info(ctx context.Context, id string) (*pageInfo, error)
 }
 
 // page is a page whatever the API version.

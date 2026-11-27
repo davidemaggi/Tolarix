@@ -40,12 +40,14 @@ func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.
 	}
 	snap := &snapshot{c: c, ctx: ctx, w: w, tree: model.NewTree(),
 		byTitle: map[string]string{}, raw: map[string]string{}, titles: map[string]string{},
-		atts: map[string]map[string]attachment{}}
+		atts:  map[string]map[string]attachment{},
+		users: &users{c: c, ctx: ctx, cache: map[string]string{}}}
 	for _, f := range pages {
 		snap.byTitle[f.page.Title] = f.page.ID
 		snap.raw[f.page.ID] = f.page.Body
 		snap.titles[f.page.ID] = f.page.Title
 	}
+	infos := snap.infos(pages)
 	for _, f := range pages {
 		p := &model.Page{ID: f.page.ID, ParentID: f.parent, Name: f.page.Title, Title: f.page.Title, Order: f.order,
 			Placeholder: f.page.Folder}
@@ -56,6 +58,9 @@ func (c *Confluence) Snapshot(ctx context.Context, w connectors.Warner) (*model.
 				Message: fmt.Sprintf("the content of %q could not be read (%v); the page is mirrored empty", p.Title, err)})
 		}
 		p.Body = body
+		if !f.page.Folder {
+			p.Meta = snap.meta(f.page, infos[f.page.ID], env)
+		}
 		snap.tree.Add(p)
 	}
 	return snap.tree, nil
@@ -72,6 +77,7 @@ type snapshot struct {
 	raw     map[string]string // page id -> storage body
 	heads   map[string][]string
 	atts    map[string]map[string]attachment // page id -> filename -> attachment
+	users   *users
 }
 
 func (s *snapshot) attachments(pageID string) map[string]attachment {
@@ -130,6 +136,11 @@ type pageEnv struct {
 
 func (e *pageEnv) SelfID() string { return e.page.ID }
 
+// UserName shows mentions as display names (storage.UserResolver).
+func (e *pageEnv) UserName(accountID, userKey, username string) (string, bool) {
+	return e.snap.users.name(userRef{AccountID: accountID, UserKey: userKey, Username: username})
+}
+
 func (e *pageEnv) PageID(space, title string) (string, bool) {
 	if space != "" && !strings.EqualFold(space, e.snap.c.addr.SpaceKey) {
 		return "", false
@@ -187,6 +198,8 @@ func (e *pageEnv) PageByURL(href string) (string, string, string, bool) {
 		id = m[1]
 	} else if v := u.Query().Get("pageId"); v != "" && strings.HasSuffix(p, "/pages/viewpage.action") {
 		id = v
+	} else if m := reTinyCode.FindStringSubmatch(p); m != nil {
+		id, _ = tinyPageID(m[1])
 	} else if m := reLinkDisplay.FindStringSubmatch(p); m != nil {
 		if !strings.EqualFold(unescapeSegment(m[1]), e.snap.c.addr.SpaceKey) {
 			return "", "", "", false

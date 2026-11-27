@@ -1,7 +1,12 @@
 package storage
 
 import (
+	"bytes"
+	"compress/flate"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -38,6 +43,13 @@ type Env interface {
 // of a page in the snapshot to its canonical id, title and anchor.
 type PageURLResolver interface {
 	PageByURL(href string) (id, title, anchor string, ok bool)
+}
+
+// UserResolver is an optional Env extension: it gives the display name of
+// the user a mention or a profile macro points at. Any of the three ids may
+// be empty; ok is false when the user is unknown.
+type UserResolver interface {
+	UserName(accountID, userKey, username string) (name string, ok bool)
 }
 
 // ToMarkdown converts a storage-format body to canonical Markdown.
@@ -285,6 +297,12 @@ func (c *toMD) inlineNode(w *inlineWriter, n *node) {
 		}
 	case "code", "tt", "kbd", "samp":
 		w.raw(c.codeSpan(n.textContent()))
+	case "sub", "sup":
+		// Markdown has no syntax for these; GitHub, Obsidian and Azure DevOps
+		// accept the HTML tags.
+		w.raw("<" + n.name + ">")
+		c.inlineChildren(w, n)
+		w.raw("</" + n.name + ">")
 	case "br":
 		if c.inTable > 0 {
 			w.raw("<br>")
@@ -428,7 +446,18 @@ func (c *toMD) image(n *node) string {
 	if wd := n.attr("ac:width"); wd != "" {
 		title = ` "width=` + wd + `"`
 	}
-	return "![" + escapeMD(alt) + "](" + mdURL(url) + title + ")"
+	out := "![" + escapeMD(alt) + "](" + mdURL(url) + title + ")"
+	if cp := n.child("ac:caption"); cp != nil {
+		if text := oneLine(c.inline(cp.kids)); text != "" {
+			// The caption becomes an italic line under the image.
+			br := "\\\n"
+			if c.inTable > 0 {
+				br = "<br>"
+			}
+			out += br + "*" + text + "*"
+		}
+	}
+	return out
 }
 
 func ownerTitle(ri *node) string {
@@ -481,8 +510,7 @@ func (c *toMD) link(n *node) string {
 		if text != "" {
 			return text
 		}
-		ri := n.child("ri:user")
-		return "@" + escapeMD(firstNonEmpty(ri.attr("ri:username"), ri.attr("ri:userkey"), ri.attr("ri:account-id"), "user"))
+		return c.user(n.child("ri:user"))
 	case n.child("ri:url") != nil:
 		u := n.child("ri:url").attr("ri:value")
 		return "[" + firstNonEmpty(text, escapeMD(u)) + "](" + mdURL(u) + ")"
@@ -498,6 +526,18 @@ func (c *toMD) link(n *node) string {
 		}
 		return text
 	}
+}
+
+// user renders a user reference as "@Display Name", or "@id" when the name
+// cannot be found.
+func (c *toMD) user(ri *node) string {
+	acc, key, name := ri.attr("ri:account-id"), ri.attr("ri:userkey"), ri.attr("ri:username")
+	if r, ok := c.env.(UserResolver); ok {
+		if dn, ok := r.UserName(acc, key, name); ok && strings.TrimSpace(dn) != "" {
+			return "@" + escapeMD(collapseSpaces(dn))
+		}
+	}
+	return "@" + escapeMD(firstNonEmpty(name, key, acc, "user"))
 }
 
 func (c *toMD) selfAnchor(text, anchor string) string {
@@ -590,50 +630,34 @@ var listStartRe = regexp.MustCompile(`^(- |\d+\. )`)
 func isListBlock(s string) bool { return listStartRe.MatchString(s) }
 
 func (c *toMD) table(n *node) string {
-	var rows [][]*node
-	var collect func(n *node)
-	collect = func(n *node) {
-		for _, k := range n.kids {
-			switch k.name {
-			case "thead", "tbody", "tfoot":
-				collect(k)
-			case "tr":
-				var cells []*node
-				for _, cell := range k.kids {
-					if cell.name == "th" || cell.name == "td" {
-						cells = append(cells, cell)
-					}
-				}
-				rows = append(rows, cells)
-			}
-		}
-	}
-	collect(n)
+	rows := tableRows(n)
 	if len(rows) == 0 {
 		return ""
 	}
 	c.inTable++
 	defer func() { c.inTable-- }()
 
-	simplified := false
+	for _, cells := range rows {
+		for _, cell := range cells {
+			if span(cell.attr("colspan")) > 1 || span(cell.attr("rowspan")) > 1 || hasBlockContent(cell) {
+				return c.htmlTable(rows)
+			}
+		}
+	}
 	ncol := 0
 	grid := make([][]string, len(rows))
 	for r, cells := range rows {
 		for _, cell := range cells {
-			if span(cell.attr("colspan")) > 1 || span(cell.attr("rowspan")) > 1 {
-				simplified = true
-			}
 			s, complex := c.cell(cell)
-			simplified = simplified || complex
+			if complex {
+				return c.htmlTable(rows)
+			}
 			grid[r] = append(grid[r], s)
 		}
 		ncol = max(ncol, len(grid[r]))
 	}
 	if ncol == 0 {
 		return ""
-	}
-	if simplified {
-		c.env.Warn("table-simplified", "a table with merged cells or block content (lists, code, panels) inside cells was simplified; check how it looks in the mirror")
 	}
 	header := make([]string, ncol)
 	body := grid
@@ -681,6 +705,32 @@ func allHeaderCells(cells []*node) bool {
 	return true
 }
 
+// One-line macros that fit in a Markdown table cell.
+var cellMacros = map[string]bool{
+	"status": true, "jira": true, "anchor": true, "gliffy": true, "profile": true,
+	"children": true, "pagetree": true,
+}
+
+// hasBlockContent reports content a Markdown table cell cannot hold: lists,
+// code, quotes, headings, nested tables and block macros.
+func hasBlockContent(n *node) bool {
+	for _, k := range n.kids {
+		switch {
+		case k.name == "ul" || k.name == "ol" || k.name == "ac:task-list" || k.name == "pre" ||
+			k.name == "blockquote" || k.name == "table" || (len(k.name) == 2 && k.name[0] == 'h' && k.name[1] >= '1' && k.name[1] <= '6'):
+			return true
+		case isMacro(k):
+			name := macroName(k)
+			if !cellMacros[name] && !viewFileMacros[name] && !strings.Contains(name, "drawio") {
+				return true
+			}
+		case hasBlockContent(k):
+			return true
+		}
+	}
+	return false
+}
+
 // cell renders a table cell on one line; complex reports block content that
 // does not fit a Markdown table cell.
 func (c *toMD) cell(n *node) (string, bool) {
@@ -702,8 +752,8 @@ func (c *toMD) macro(n *node) []string {
 		lang := ""
 		if name == "code" {
 			lang = langFromConfluence(n.param("language"))
-			if lang == "" && strings.EqualFold(n.param("title"), "mermaid") {
-				lang = "mermaid" // written so by FromMarkdown
+			if t := strings.ToLower(n.param("title")); lang == "" && titledLangs[t] {
+				lang = t // written so by FromMarkdown
 			}
 		}
 		return []string{fence(lang, plainBody(n))}
@@ -716,7 +766,20 @@ func (c *toMD) macro(n *node) []string {
 		return []string{model.TOCMarker}
 	case name == "children" || name == "pagetree" || name == "anchor":
 		return nil // the mirror's own navigation shows child pages
-	case name == "details" || name == "section" || name == "column" || name == "excerpt" || name == "toc-zone" || name == "div":
+	case name == "details" && strings.EqualFold(n.param("hidden"), "true"):
+		return nil // hidden page properties: front matter only (see PageProperties)
+	case name == "excerpt":
+		if body == nil {
+			return nil
+		}
+		// Kept between markers so an excerpt-include in a Confluence mirror
+		// still finds it; other mirrors hide the comments.
+		bs := c.blocks(body.kids)
+		if len(bs) == 0 {
+			return nil
+		}
+		return append(append([]string{model.ExcerptStart}, bs...), model.ExcerptEnd)
+	case name == "details" || name == "section" || name == "column" || name == "toc-zone" || name == "div":
 		if body == nil {
 			return nil
 		}
@@ -725,12 +788,150 @@ func (c *toMD) macro(n *node) []string {
 		return []string{c.diagram(n)}
 	case strings.Contains(name, "mermaid") && n.child("ac:plain-text-body") != nil:
 		return []string{fence("mermaid", plainBody(n))}
+	case name == "plantuml" || name == "plantumlcloud":
+		if src, ok := plantUML(n); ok {
+			return []string{fence("plantuml", src)}
+		}
+		c.env.Warn("macro-unsupported", fmt.Sprintf("the source of the %s diagram could not be read; mirrors that are not Confluence show the macro as a code block", name))
+		return []string{fence("confluence-macro", serialize(n))}
+	case name == "gliffy":
+		return []string{c.gliffy(n)}
+	case viewFileMacros[name]:
+		return c.viewFile(n)
+	case name == "include" || name == "excerpt-include":
+		return c.include(n, name == "excerpt-include")
+	case name == "profile":
+		if ri := findDescendant(n, "ri:user"); ri != nil {
+			return []string{c.user(ri)}
+		}
+		return nil
 	case inlineMacros[name]:
 		return c.paragraph([]*node{n})
 	default:
 		c.env.Warn("macro-unsupported", fmt.Sprintf("the Confluence macro %q has no equivalent; mirrors that are not Confluence show it as a code block", name))
 		return []string{fence("confluence-macro", serialize(n))}
 	}
+}
+
+// Diagram languages FromMarkdown stores as code macros titled with the
+// language, because Confluence has no built-in macro for them.
+var titledLangs = map[string]bool{"mermaid": true, "plantuml": true}
+
+// Macros that show an attached file (PDF, Office documents) on the page.
+var viewFileMacros = map[string]bool{
+	"viewpdf": true, "view-file": true, "viewfile": true, "viewdoc": true,
+	"viewxls": true, "viewppt": true, "multimedia": true,
+}
+
+// paramNode returns the <ac:parameter ac:name="name"> element of a macro.
+func paramNode(n *node, name string) *node {
+	for _, k := range n.kids {
+		if k.name == "ac:parameter" && k.attr("ac:name") == name {
+			return k
+		}
+	}
+	return nil
+}
+
+func findDescendant(n *node, name string) *node {
+	for _, k := range n.kids {
+		if k.name == name {
+			return k
+		}
+		if d := findDescendant(k, name); d != nil {
+			return d
+		}
+	}
+	return nil
+}
+
+// gliffy shows the PNG preview Gliffy stores next to the diagram.
+func (c *toMD) gliffy(n *node) string {
+	name := n.param("name")
+	if hash, ok := c.env.Attachment("", name+".png"); ok {
+		return "![" + escapeMD(name) + "](" + model.AttachmentLink(hash) + ")"
+	}
+	c.env.Warn("diagram-missing", fmt.Sprintf("the preview of the Gliffy diagram %q was not found among the page attachments; only its name is shown", name))
+	return escapeMD("[diagram: " + name + "]")
+}
+
+// viewFile turns a file preview into a link to the attachment.
+func (c *toMD) viewFile(n *node) []string {
+	var ri *node
+	if p := paramNode(n, "name"); p != nil {
+		ri = p.child("ri:attachment")
+	}
+	if ri == nil {
+		ri = findDescendant(n, "ri:attachment")
+	}
+	if ri == nil {
+		return nil
+	}
+	filename := ri.attr("ri:filename")
+	hash, ok := c.env.Attachment(ownerTitle(ri), filename)
+	if !ok {
+		c.env.Warn("attachment-missing", fmt.Sprintf("the attachment %q was not found; only its name is shown", filename))
+		return []string{escapeMD(filename)}
+	}
+	return []string{"[" + escapeMD(filename) + "](" + model.AttachmentLink(hash) + ")"}
+}
+
+// include writes a page embed: ![Title](tolarix://page/<id>), titled
+// "excerpt" when only the page's excerpt is included.
+func (c *toMD) include(n *node, excerpt bool) []string {
+	var ri *node
+	for _, name := range []string{"", "page"} {
+		if p := paramNode(n, name); p != nil {
+			if ri = findDescendant(p, "ri:page"); ri != nil {
+				break
+			}
+		}
+	}
+	if ri == nil {
+		ri = findDescendant(n, "ri:page")
+	}
+	if ri == nil || ri.attr("ri:content-title") == "" {
+		return nil
+	}
+	title := ri.attr("ri:content-title")
+	id, ok := c.env.PageID(ri.attr("ri:space-key"), title)
+	if !ok {
+		c.env.Warn("link-outside-master", fmt.Sprintf("the page %q included here is outside the Master (another space, or outside the root page); only its title is shown", title))
+		return []string{escapeMD(title)}
+	}
+	suffix := ""
+	if excerpt {
+		suffix = ` "excerpt"`
+	}
+	return []string{"![" + escapeMD(title) + "](" + model.PageLink(id, "") + suffix + ")"}
+}
+
+// htmlTable writes a table that a Markdown table cannot hold (merged cells,
+// lists or code inside cells) as an HTML block. Cell content is rendered as
+// HTML from its Markdown, links and images keeping their canonical URLs.
+// The block has no blank line, so Markdown readers keep it whole.
+func (c *toMD) htmlTable(rows [][]*node) string {
+	var b strings.Builder
+	b.WriteString("<table>\n")
+	for _, cells := range rows {
+		b.WriteString("<tr>")
+		for _, cell := range cells {
+			b.WriteString("<" + cell.name)
+			for _, a := range []string{"colspan", "rowspan"} {
+				if v := span(cell.attr(a)); v > 1 {
+					b.WriteString(" " + a + `="` + strconv.Itoa(v) + `"`)
+				}
+			}
+			b.WriteString(">")
+			sub := &toMD{env: c.env}
+			b.WriteString(mdToHTML(strings.Join(sub.blocks(cell.kids), "\n\n")))
+			b.WriteString("</" + cell.name + ">")
+		}
+		b.WriteString("</tr>\n")
+	}
+	b.WriteString("</table>")
+	c.env.Warn("table-html", "a table with merged cells or block content (lists, code, panels) inside cells is kept as an HTML table; some Markdown tools show links and images inside it differently")
+	return b.String()
 }
 
 func plainBody(n *node) string {
@@ -934,4 +1135,58 @@ func firstNonEmpty(vs ...string) string {
 		}
 	}
 	return ""
+}
+
+// maxPlantUML bounds an inflated plantumlcloud payload: deflate reaches
+// about 1000:1, so page content must not decide how much memory is used.
+const maxPlantUML = 4 << 20
+
+// plantUML reads the diagram source of a PlantUML macro. The Data Center
+// app keeps it in the plain-text body (on Cloud wrapped in JSON as
+// {"umlDefinition": ...}); the Cloud app "plantumlcloud" keeps it base64
+// encoded, optionally raw-deflated, in the "data" parameter.
+func plantUML(n *node) (string, bool) {
+	if body := strings.TrimSpace(plainBody(n)); body != "" {
+		if strings.HasPrefix(body, "{") {
+			var v struct {
+				UML string `json:"umlDefinition"`
+			}
+			if json.Unmarshal([]byte(body), &v) == nil && strings.TrimSpace(v.UML) != "" {
+				return strings.TrimSpace(v.UML), true
+			}
+		}
+		return body, true
+	}
+	data := strings.Join(strings.Fields(n.param("data")), "")
+	if data == "" {
+		return "", false
+	}
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		if raw, err = base64.RawStdEncoding.DecodeString(data); err != nil {
+			return "", false
+		}
+	}
+	if strings.EqualFold(n.param("compressed"), "true") {
+		r := flate.NewReader(bytes.NewReader(raw))
+		defer func() { _ = r.Close() }()
+		out, err := io.ReadAll(io.LimitReader(r, maxPlantUML+1))
+		if err != nil || len(out) > maxPlantUML {
+			return "", false
+		}
+		raw = out
+	}
+	if !utf8.Valid(raw) {
+		return "", false
+	}
+	src := string(raw)
+	// Some versions percent-encode the source; PlantUML itself uses a
+	// literal % (%date%), so decode only when the text is not plain source.
+	if !strings.Contains(src, "@start") {
+		if dec, err := url.QueryUnescape(src); err == nil {
+			src = dec
+		}
+	}
+	src = strings.TrimSpace(src)
+	return src, src != ""
 }

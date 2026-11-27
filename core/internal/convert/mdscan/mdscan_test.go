@@ -82,3 +82,22 @@ func TestSplitFrontMatter(t *testing.T) {
 		t.Fatalf("crlf: %q %q", y, b)
 	}
 }
+
+func TestReplaceHTMLLinks(t *testing.T) {
+	src := "<table>\n<tr><td><a href=\"tolarix://page/1#A&amp;B\">x</a> <a href=\"tolarix://page/2\">y</a></td>" +
+		"<td><img src=\"tolarix://att/abc\" alt=\"a\"></td></tr>\n</table>\n\n`<a href=\"tolarix://page/1\">`\n"
+	got := ReplaceHTMLLinks(src, func(attr, u string) (string, bool) {
+		switch u {
+		case "tolarix://page/1#A&B":
+			return "One.md#A&B", true
+		case "tolarix://att/abc":
+			return attr + ".png", true
+		}
+		return "", false
+	})
+	want := "<table>\n<tr><td><a href=\"One.md#A&amp;B\">x</a> <a>y</a></td>" +
+		"<td><img src=\"src.png\" alt=\"a\"></td></tr>\n</table>\n\n`<a href=\"tolarix://page/1\">`\n"
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+}

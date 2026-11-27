@@ -1,7 +1,11 @@
 package storage
 
 import (
+	"bytes"
+	"compress/flate"
+	"encoding/base64"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,6 +77,14 @@ func (e *fakeEnv) PageByURL(href string) (string, string, string, bool) {
 		return "200", "Backend Guide", anchor, true
 	}
 	return "", "", "", false
+}
+
+// UserName knows one Cloud account.
+func (e *fakeEnv) UserName(accountID, _, _ string) (string, bool) {
+	if accountID == "557058:abc" {
+		return "Ada Lovelace", true
+	}
+	return "", false
 }
 
 // fakeWriter is the same space seen from the writing side.
@@ -219,5 +231,44 @@ func TestToMarkdownToleratesSloppyMarkup(t *testing.T) {
 	}
 	if !strings.Contains(md, "**bold") || !strings.Contains(md, "…") || !strings.Contains(md, "next") {
 		t.Fatalf("md = %q", md)
+	}
+}
+
+func TestPageProperties(t *testing.T) {
+	src := `<p>intro</p>
+<ac:structured-macro ac:name="details"><ac:rich-text-body><table><tbody>
+<tr><th><p>Owner</p></th><td><p><ac:link><ri:user ri:account-id="557058:abc"/></ac:link></p></td></tr>
+<tr><th>Status</th><td><ac:structured-macro ac:name="status"><ac:parameter ac:name="title">Done</ac:parameter></ac:structured-macro></td></tr>
+<tr><th>Reviewers</th><td><ul><li>Ann</li><li>Bob <strong>B.</strong></li></ul></td></tr>
+<tr><th>Due</th><td><time datetime="2026-12-01"/></td></tr>
+<tr><th>owner</th><td>duplicate</td></tr>
+</tbody></table></ac:rich-text-body></ac:structured-macro>
+<ac:structured-macro ac:name="details"><ac:parameter ac:name="hidden">true</ac:parameter><ac:rich-text-body><table><tbody>
+<tr><th>Team</th><th>Area</th></tr><tr><td>Ops</td><td>Infra</td></tr>
+</tbody></table></ac:rich-text-body></ac:structured-macro>`
+	got := PageProperties(src, &fakeEnv{})
+	want := []Property{
+		{"Owner", "Ada Lovelace"}, {"Status", "Done"}, {"Reviewers", []string{"Ann", "Bob B."}},
+		{"Due", "2026-12-01"}, {"Team", "Ops"}, {"Area", "Infra"},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("got %v\nwant %v", got, want)
+	}
+}
+
+func TestPlantUMLCloudTooLarge(t *testing.T) {
+	var buf bytes.Buffer
+	fw, _ := flate.NewWriter(&buf, flate.BestCompression)
+	_, _ = fw.Write(bytes.Repeat([]byte("a"), maxPlantUML+10))
+	_ = fw.Close()
+	src := `<ac:structured-macro ac:name="plantumlcloud"><ac:parameter ac:name="compressed">true</ac:parameter><ac:parameter ac:name="data">` +
+		base64.StdEncoding.EncodeToString(buf.Bytes()) + `</ac:parameter></ac:structured-macro>`
+	env := &fakeEnv{}
+	md, err := ToMarkdown(src, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(md, "```confluence-macro") || len(env.warnings) != 1 || env.warnings[0] != "macro-unsupported" {
+		t.Fatalf("md = %.80q, warnings = %v", md, env.warnings)
 	}
 }

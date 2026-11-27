@@ -10,6 +10,13 @@
 //   - Mermaid:              ```mermaid fenced code blocks
 //   - Table of contents:    a line holding only TOCMarker
 //   - Unknown macros:       ```confluence-macro fenced blocks holding the raw storage XML
+//   - Page embeds:          ![Title](tolarix://page/<id>) shows the other page's content in
+//     place (Confluence include, Obsidian ![[Note]]); titled "excerpt" when only the page's
+//     excerpt is shown. Targets without embeds write a link.
+//   - Excerpts:             blocks between ExcerptStart and ExcerptEnd lines
+//   - Complex tables:       an HTML <table> block (merged cells, lists or code in cells) on
+//     lines without blank lines; links and images inside keep canonical URLs in href/src
+//   - Subscript, superscript: <sub>…</sub> and <sup>…</sup>
 //
 // Fragments carry the raw heading text (percent-escaped), not a slug: each
 // target slugs headings its own way.
@@ -26,6 +33,17 @@ import (
 // TOCMarker is the canonical "table of contents here" line. It is an HTML
 // comment so targets without a TOC feature (Obsidian) simply hide it.
 const TOCMarker = "<!-- tolarix:toc -->"
+
+// ExcerptStart and ExcerptEnd surround the excerpt of a page (the part other
+// Confluence pages can include). Being comments, they are hidden elsewhere.
+const (
+	ExcerptStart = "<!-- tolarix:excerpt -->"
+	ExcerptEnd   = "<!-- tolarix:excerpt-end -->"
+)
+
+// ExcerptTitle is the link title of a page embed that shows only the
+// embedded page's excerpt.
+const ExcerptTitle = "excerpt"
 
 // Page is one node of the tree.
 type Page struct {

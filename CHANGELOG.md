@@ -8,6 +8,23 @@ YAML import format and the REST API under `/api/v1` are the public interface.
 The release workflow publishes the section matching the tag as the release
 notes, so every release needs a `## [X.Y.Z]` heading here.
 
+## [Unreleased]
+
+### Added
+
+- Confluence: short links (`/x/…`) work as a connection address and as links to pages of the Master.
+- Confluence: mentions and *profile* macros show the person's name.
+- Confluence: PlantUML (also PlantUML Cloud), Gliffy previews, *View file* / PDF macros, *Include Page* and *Excerpt Include*, subscript and superscript are converted.
+- Confluence: optional front matter with labels (`tags`) and Page Properties, and with page details (id, address, author, dates, version).
+- Tables with merged cells or lists, code or images in their cells are kept as HTML tables (warning `table-html`) instead of being simplified; they are read back into Confluence tables.
+- Image captions are kept as an italic line under the image.
+- Obsidian embedded notes (`![[Note]]`) become *Include Page* macros in Confluence and stay embeds in Obsidian Mirrors; other Mirrors show a link (warning `page-embed`).
+
+### Changed
+
+- Confluence Masters: mirrored pages that mention people, use captions or complex tables change once on the next run.
+- The `table-simplified` and `note-embed` warnings are gone (see `table-html` and `page-embed`).
+
 ## [1.0.0] - 2026-11-26
 
 First public release.

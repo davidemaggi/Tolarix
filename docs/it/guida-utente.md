@@ -68,6 +68,7 @@ account dedicato con accesso solo agli spazi o alle wiki che sincronizza.
 | Indirizzo dello spazio o della pagina | Copialo dal browser. Uno spazio (`…/display/KEY`) sincronizza tutto lo spazio; una pagina (`…/display/KEY/Titolo`, `…/pages/viewpage.action?pageId=123`) sincronizza quella pagina e tutto ciò che sta sotto. |
 | Personal access token o password | Un personal access token (avatar → **Profilo → Personal Access Tokens → Crea token**). |
 | Nome utente | Solo per le versioni senza token. In quel caso il campo del token contiene la password dell'utente. |
+| Etichette e Page Properties / Dettagli della pagina nel front matter | Facoltative, vedi sotto. |
 
 - **Permessi:** *Visualizza* sullo spazio per un Master. Per un Mirror, *Aggiungi*
   pagine e allegati, più *Elimina* pagine e allegati se il flusso usa la regola
@@ -75,6 +76,18 @@ account dedicato con accesso solo agli spazi o alle wiki che sincronizza.
   archivio, non eliminate.
 - **Posizione nel Mirror:** *Pagina padre*, come titolo o id numerico. Vuota
   indica la pagina della connessione, o la radice dello spazio.
+- Come indirizzo vanno bene anche i link brevi (`…/x/AbCd`, da **Condividi → Copia link**).
+
+Le due opzioni sul front matter (per entrambi i tipi di connessione Confluence)
+contano solo quando lo spazio è un Master e sono disattivate di default:
+
+- **Etichette e Page Properties nel front matter:** le etichette di ogni pagina
+  diventano `tags` e le righe delle sue tabelle *Page Properties* diventano voci
+  del front matter (gli utenti compaiono con il nome, gli elenchi come elenchi).
+- **Dettagli della pagina nel front matter:** `confluence_id`, `confluence_url`,
+  `author`, `created`, `updated`, `updated_by` e `version`.
+
+Costano una richiesta in più per pagina a ogni esecuzione.
 
 ### Confluence Cloud
 
@@ -83,6 +96,7 @@ account dedicato con accesso solo agli spazi o alle wiki che sincronizza.
 | Indirizzo dello spazio o della pagina | Per esempio `https://tuo-sito.atlassian.net/wiki/spaces/KEY/overview`, o l'indirizzo di una pagina per sincronizzare lei e ciò che sta sotto. |
 | Email | L'email dell'account Atlassian a cui appartiene il token. |
 | API token | Un API token **classico**: [id.atlassian.com](https://id.atlassian.com) → **Sicurezza → Crea e gestisci token API → Crea token API**. I token con ambiti (scoped) non sono ancora supportati. |
+| Etichette e Page Properties / Dettagli della pagina nel front matter | Facoltative, come su Data Center. |
 
 - **Permessi:** come su Data Center: *Visualizza* per un Master; *Aggiungi* pagine
   e allegati per un Mirror, più *Elimina* per la regola di eliminazione.
@@ -310,6 +324,8 @@ perfettamente. I più comuni:
 | `attachment-missing`, `attachment-not-mirrored` | un file citato non è stato trovato, oppure la copia degli allegati è disattivata |
 | `render-failed`, `diagram-missing` | un diagramma draw.io non è stato convertito in PNG (vedi l'admin guide) |
 | `confluence-macro`, `macro-unsupported` | una macro di Confluence non ha un equivalente nel Mirror |
+| `table-html` | una tabella con celle unite, o con elenchi, codice o immagini nelle celle, è stata mantenuta come tabella HTML |
+| `page-embed` | il Master mostra il contenuto di un'altra pagina dentro questa (*Include Page* di Confluence, `![[Nota]]` di Obsidian); questo Mirror mostra invece un link |
 | `scope-missing` | una pagina selezionata o esclusa non esiste più nel Master |
 
 La riga degli allegati in fondo a ogni Mirror indica quanti file sono stati
@@ -335,9 +351,9 @@ un avviso. Non elimina mai contenuti in silenzio. Dettagli tecnici (in inglese):
 
 | Da → A | Cosa cambia |
 |---|---|
-| Obsidian → Confluence | I callout diventano pannelli info/tip/note/warning; quelli richiudibili diventano *expand*. Mermaid diventa un blocco `code` intitolato `mermaid` (Data Center non ha Mermaid integrato). Le note incorporate (`![[Nota]]`) diventano link. Il front matter non viene riportato (le etichette di Confluence non sono ancora supportate). L'ordine del Master si perde: Confluence ordina da sé le pagine figlie. |
+| Obsidian → Confluence | I callout diventano pannelli info/tip/note/warning; quelli richiudibili diventano *expand*. Mermaid e PlantUML diventano un blocco `code` intitolato `mermaid` o `plantuml` (Data Center non ha Mermaid integrato). Le note incorporate (`![[Nota]]`) diventano macro *Include Page*. Le tabelle HTML (`<table>`) diventano tabelle di Confluence, celle unite comprese. Il front matter non viene riportato (le etichette di Confluence non sono ancora supportate). L'ordine del Master si perde: Confluence ordina da sé le pagine figlie. |
 | Obsidian → Azure DevOps | I callout diventano un'etichetta in grassetto in una citazione (`> **Tip:** …`), perché la wiki non ha callout. Mermaid diventa `::: mermaid`. Il front matter viene mantenuto. L'ordine delle pagine segue il Master (`.order`). |
-| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` diventano callout (in Azure DevOps, un'etichetta in grassetto). `expand` diventa un callout richiudibile. `toc` resta un indice. `children`, `pagetree` e `anchor` vengono omessi. `status` diventa il suo testo tra parentesi quadre (`[FATTO]`), le issue Jira diventano la loro chiave. Ogni altra macro diventa un blocco di codice `confluence-macro` con il suo XML, con un avviso. Lavagne (whiteboard), database ed embed di Confluence Cloud vengono saltati; le cartelle diventano pagine con solo il titolo. |
+| Confluence → Obsidian / Azure DevOps | `info`/`tip`/`note`/`warning`/`panel` diventano callout (in Azure DevOps, un'etichetta in grassetto). `expand` diventa un callout richiudibile. `toc` resta un indice. `children`, `pagetree` e `anchor` vengono omessi. `status` diventa il suo testo tra parentesi quadre (`[FATTO]`), le issue Jira diventano la loro chiave. Le menzioni e le macro *profile* mostrano il nome della persona. PlantUML diventa un blocco di codice `plantuml`; i diagrammi Gliffy mostrano la loro anteprima PNG; le macro *View file* / *PDF* diventano un link all'allegato. *Include Page* ed *Excerpt Include* diventano una nota incorporata in Obsidian e un link altrove (`page-embed`). Le tabelle con celle unite, o con elenchi, codice o immagini nelle celle, restano tabelle HTML (`table-html`); in Obsidian le immagini al loro interno potrebbero non comparire. Le didascalie delle immagini diventano una riga in corsivo sotto l'immagine. I link brevi (`/x/…`) a pagine del Master diventano link alle pagine. Ogni altra macro diventa un blocco di codice `confluence-macro` con il suo XML, con un avviso. Lavagne (whiteboard), database ed embed di Confluence Cloud vengono saltati; le cartelle diventano pagine con solo il titolo. |
 | Confluence → Confluence | Le macro, anche quelle sconosciute, vengono riscritte com'erano. I titoli vengono resi unici per spazio. |
 | Azure DevOps → altre | `[[_TOC_]]` diventa l'indice del Mirror. `[[_TOSP_]]` (elenco delle sottopagine) viene omesso con un avviso. Le dimensioni delle immagini (`=300x200`) vengono mantenute dove il Mirror le supporta. |
 | qualsiasi → Obsidian | I link vengono scritti come wikilink con il percorso completo nel vault. Gli allegati vanno nella cartella allegati del vault (o in `attachments/`); file con lo stesso nome ma contenuto diverso ricevono un breve hash nel nome. Obsidian non ha un ordine manuale: le pagine compaiono in ordine alfabetico. |

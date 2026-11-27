@@ -117,6 +117,31 @@ func encode(p *model.Page, l *connectors.Layout, w connectors.Warner) ([]byte, e
 	body := mdscan.ReplaceFuncAt(p.Body, mdscan.MarkdownLink, func(pos int, m []string) (string, bool) {
 		return encodeLink(p, l, w, m[1] == "!", m[2], m[3], m[4], mdscan.InTableRow(p.Body, pos))
 	})
+	// Links and images inside HTML tables: vault paths, which Obsidian
+	// resolves for links; images there may not show (see the user guide).
+	body = mdscan.ReplaceHTMLLinks(body, func(_, u string) (string, bool) {
+		if id, heading, ok := model.ParsePageLink(u); ok {
+			pl, found := l.Pages[id]
+			if !found || strings.HasSuffix(pl.Key, "/") {
+				w.Warn(connectors.Warning{PageID: p.ID, Code: "link-out-of-scope",
+					Message: "a link inside a table points to a page that is not part of this mirror; it is shown as plain text"})
+				return "", false
+			}
+			dest := pl.Key
+			if heading != "" {
+				dest += "#" + heading
+			}
+			return dest, true
+		}
+		if hash, ok := model.ParseAttachmentLink(u); ok {
+			if key, found := l.Attachments[hash]; found {
+				return key, true
+			}
+			w.Warn(connectors.Warning{PageID: p.ID, Code: "attachment-not-mirrored",
+				Message: "an attachment used inside a table is not copied to this mirror; only its description is shown"})
+		}
+		return "", false
+	})
 	b.WriteString(body)
 	return b.Bytes(), nil
 }
@@ -152,6 +177,9 @@ func encodeLink(p *model.Page, l *connectors.Layout, w connectors.Warner, image 
 		redundant := plain == "" ||
 			(heading == "" && (plain == base || plain == pl.Title)) ||
 			(heading != "" && (plain == base+" > "+heading || (id == p.ID && plain == heading)))
+		if image { // a page embed
+			return "![[" + target + "]]", true
+		}
 		if redundant {
 			return "[[" + target + "]]", true
 		}

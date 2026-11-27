@@ -24,10 +24,27 @@ with Cloud; each REST call goes through the `api` interface (`api.go`).
 or of a page (`/display/KEY/Title`, `/pages/viewpage.action?pageId=` or `?spaceKey=&title=`).
 A page address mirrors that page and everything below it. A context path (`/confluence`)
 is kept. `token` is a personal access token (Bearer). With `username` set, it is that
-user's password instead (Basic).
+user's password instead (Basic). Short links (`/x/<code>`) are decoded to the page id
+(the code is the id as little-endian bytes in base64, `-`/`_` for `/`/`+`, trailing `A`s
+and padding cut). The bool fields `properties` and `pageDetails` are read only when the
+space is a Master, see below.
 
 **As a Master.** Page ids are the Confluence ids. Sibling order is the order Confluence lists children in. Attachments are downloaded once per run and keyed by content hash.
 Links to pages outside the space or subtree become plain text with a warning.
+- Mentions (`ri:user`) and the `profile` macro become `@Display Name`; names come from
+  `GET /rest/api/user?accountId=|key=|username=` (v1, also on Cloud), cached per run. A
+  failed lookup keeps the id.
+- Links to short links (`/x/<code>`) of pages in the snapshot become page links.
+- Front matter (`meta.go`, one extra request per page, 8 in parallel):
+  - `properties`: labels (`global` prefix only) as `tags`, then the rows of every
+    `details` (Page Properties) table, hidden ones included (`storage.PageProperties`):
+    key/value rows, or a header row over one value row. Values are plain text, lists
+    become lists, users names. Keys are kept once, case-insensitively; keys that clash
+    with `tags` or the page-details keys are skipped.
+  - `pageDetails`: `confluence_id`, `confluence_url`, `author`, `created`, `updated`,
+    `updated_by`, `version`. v1: `content/{id}?expand=history,version,metadata.labels`;
+    v2: `pages/{id}?include-labels=true&include-version=true`, users by account id.
+  - A page whose details cannot be read gets `page-info-unreadable` and no front matter.
 
 **As a Mirror.** Location `parent` is the title or id of the page that mirrors go under.
 Empty means the connection's page, or the top of the space.
@@ -54,7 +71,16 @@ Empty means the connection's page, or the top of the space.
 | `expand` | foldable callout `[!note]-` |
 | `toc` | `<!-- tolarix:toc -->` |
 | `children`, `pagetree`, `anchor` | dropped (mirrors have their own navigation) |
-| `details`, `section`/`column`, `excerpt`, `div` | their content |
+| `details`, `section`/`column`, `div` | their content (a `details` macro with `hidden=true` is dropped) |
+| `excerpt` | its content between `<!-- tolarix:excerpt -->` and `<!-- tolarix:excerpt-end -->` (round-trips) |
+| `include` / `excerpt-include` | `![Title](tolarix://page/<id>)` (title `excerpt` for an excerpt); outside the Master: text with `link-outside-master` |
+| `plantuml`, `plantumlcloud` | ```` ```plantuml ```` (plain, JSON `umlDefinition`, or base64 + raw deflate, capped at 4 MiB); written back as a `code` macro titled `plantuml` |
+| `gliffy` | its `<name>.png` attachment (`diagram-missing` when absent) |
+| `viewpdf`, `view-file`, `viewfile`, `viewdoc`, `viewxls`, `viewppt`, `multimedia` | a link to the attachment |
+| `profile`, `ri:user` | `@Display Name` |
+| `sub`, `sup` | `<sub>`, `<sup>` (round-trip) |
+| image caption (`ac:caption`) | `*caption*` on the line under the image (not written back) |
+| table with `colspan`/`rowspan`, or block content in a cell | an HTML `<table>` block on consecutive lines, cells rendered to one-line HTML (`table-html`); read back into a storage table |
 | `status`, `jira` (inline) | `[STATUS]`, issue key as text |
 | emoticons | emoji |
 | `ac:link` to a page / attachment, `ac:image` | `tolarix://page/…` / `tolarix://att/…` |

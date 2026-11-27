@@ -166,6 +166,10 @@
       "tokenHint": "Un personal access token (Profilo → Personal Access Tokens). Se indichi un nome utente, qui va la sua password.",
       "username": "Nome utente",
       "usernameHint": "Solo per l'accesso con password. Lascialo vuoto se usi un personal access token.",
+      "properties": "Etichette e Page Properties nel front matter",
+      "propertiesHint": "Quando questo spazio è il Master: le etichette di ogni pagina diventano tag e la sua tabella Page Properties diventa voci del front matter.",
+      "pageDetails": "Dettagli della pagina nel front matter",
+      "pageDetailsHint": "Quando questo spazio è il Master: id, indirizzo, autore, date di creazione e modifica, ultimo autore delle modifiche e versione di ogni pagina finiscono nel suo front matter.",
       "location": {
         "parent": "Pagina padre",
         "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la radice dello spazio."
@@ -188,6 +192,10 @@
       "emailHint": "L'email dell'account Atlassian a cui appartiene l'API token.",
       "token": "API token",
       "tokenHint": "Crea un API token classico su id.atlassian.com → Security → API tokens. I token con scope non sono ancora supportati.",
+      "properties": "Etichette e Page Properties nel front matter",
+      "propertiesHint": "Quando questo spazio è il Master: le etichette di ogni pagina diventano tag e la sua tabella Page Properties diventa voci del front matter.",
+      "pageDetails": "Dettagli della pagina nel front matter",
+      "pageDetailsHint": "Quando questo spazio è il Master: id, indirizzo, autore, date di creazione e modifica, ultimo autore delle modifiche e versione di ogni pagina finiscono nel suo front matter.",
       "location": {
         "parent": "Pagina padre",
         "parentHint": "Titolo (o id numerico) della pagina sotto cui finiscono le pagine copiate. Lascialo vuoto per usare la pagina della connessione o la home page dello spazio."

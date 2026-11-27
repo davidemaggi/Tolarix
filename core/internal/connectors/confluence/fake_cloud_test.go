@@ -192,7 +192,14 @@ func (f *fakeConfluence) serveV2(w http.ResponseWriter, r *http.Request, path st
 		}
 		switch r.Method {
 		case http.MethodGet:
-			writeJSON(w, f.v2JSON(p, body))
+			m := f.v2JSON(p, body)
+			m["authorId"], m["createdAt"] = "557058:ada", "2024-01-02T09:00:00.000Z"
+			m["version"] = map[string]any{"number": p.Version, "authorId": "557058:alan", "createdAt": "2024-03-04T11:00:00.000Z"}
+			m["_links"] = map[string]any{"webui": "/spaces/" + f.space + "/pages/" + p.ID}
+			if r.URL.Query().Get("include-labels") == "true" {
+				m["labels"] = map[string]any{"results": fakeLabels(p)}
+			}
+			writeJSON(w, m)
 		case http.MethodPut:
 			var b v2PutBody
 			_ = json.NewDecoder(r.Body).Decode(&b)
